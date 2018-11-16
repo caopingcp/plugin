@@ -14,6 +14,7 @@ import (
 	_ "github.com/33cn/plugin/plugin/dapp/norm"
 	_ "github.com/33cn/plugin/plugin/dapp/paracross"
 	_ "github.com/33cn/plugin/plugin/dapp/pokerbull"
+	_ "github.com/33cn/plugin/plugin/dapp/powerball"
 	_ "github.com/33cn/plugin/plugin/dapp/privacy"
 	_ "github.com/33cn/plugin/plugin/dapp/relay"
 	_ "github.com/33cn/plugin/plugin/dapp/retrieve"

@@ -65,6 +65,14 @@ func (powerball PowerballType) CreateTx(action string, message json.RawMessage) 
 			return nil, types.ErrInvalidParam
 		}
 		return CreateRawPowerballBuyTx(&param)
+	} else if action == "PowerballPause" {
+		var param PowerballPauseTx
+		err := json.Unmarshal(message, &param)
+		if err != nil {
+			plog.Error("CreateTx", "Error", err)
+			return nil, types.ErrInvalidParam
+		}
+		return CreateRawPowerballPauseTx(&param)
 	} else if action == "PowerballDraw" {
 		var param PowerballDrawTx
 		err := json.Unmarshal(message, &param)
@@ -92,6 +100,7 @@ func (lott PowerballType) GetTypeMap() map[string]int32 {
 	return map[string]int32{
 		"Create": PowerballActionCreate,
 		"Buy":    PowerballActionBuy,
+		"Pause":  PowerballActionPause,
 		"Draw":   PowerballActionDraw,
 		"Close":  PowerballActionClose,
 	}
@@ -104,8 +113,9 @@ func CreateRawPowerballCreateTx(parm *PowerballCreateTx) (*types.Transaction, er
 	}
 
 	v := &PowerballCreate{
-		PurBlockNum:  parm.PurBlockNum,
-		DrawBlockNum: parm.DrawBlockNum,
+		PurTime:  parm.PurTime,
+		DrawTime: parm.DrawTime,
+		TicketPrice: parm.TicketPrice,
 	}
 	create := &PowerballAction{
 		Ty:    PowerballActionCreate,
@@ -134,8 +144,7 @@ func CreateRawPowerballBuyTx(parm *PowerballBuyTx) (*types.Transaction, error) {
 	v := &PowerballBuy{
 		PowerballId: parm.PowerballId,
 		Amount:      parm.Amount,
-		Number:      parm.Number,
-		Way:         parm.Way,
+		Number:      &BallNumber{parm.Number},
 	}
 	buy := &PowerballAction{
 		Ty:    PowerballActionBuy,
@@ -144,6 +153,33 @@ func CreateRawPowerballBuyTx(parm *PowerballBuyTx) (*types.Transaction, error) {
 	tx := &types.Transaction{
 		Execer:  []byte(types.ExecName(PowerballX)),
 		Payload: types.Encode(buy),
+		Fee:     parm.Fee,
+		To:      address.ExecAddress(types.ExecName(PowerballX)),
+	}
+	name := types.ExecName(PowerballX)
+	tx, err := types.FormatTx(name, tx)
+	if err != nil {
+		return nil, err
+	}
+	return tx, nil
+}
+
+func CreateRawPowerballPauseTx(parm *PowerballPauseTx) (*types.Transaction, error) {
+	if parm == nil {
+		plog.Error("CreateRawPowerballPauseTx", "parm", parm)
+		return nil, types.ErrInvalidParam
+	}
+
+	v := &PowerballPause{
+		PowerballId: parm.PowerballId,
+	}
+	pause := &PowerballAction{
+		Ty:    PowerballActionPause,
+		Value: &PowerballAction_Pause{v},
+	}
+	tx := &types.Transaction{
+		Execer:  []byte(types.ExecName(PowerballX)),
+		Payload: types.Encode(pause),
 		Fee:     parm.Fee,
 		To:      address.ExecAddress(types.ExecName(PowerballX)),
 	}

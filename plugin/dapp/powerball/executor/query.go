@@ -14,9 +14,11 @@ func (l *Powerball) Query_GetPowerballNormalInfo(param *pty.ReqPowerballInfo) (t
 	if err != nil {
 		return nil, err
 	}
-	return &pty.ReplyPowerballNormalInfo{powerball.CreateHeight,
-		powerball.PurBlockNum,
-		powerball.DrawBlockNum,
+	return &pty.ReplyPowerballNormalInfo{
+		powerball.CreateHeight,
+		powerball.PurTime,
+		powerball.DrawTime,
+		powerball.TicketPrice,
 		powerball.CreateAddr}, nil
 }
 
@@ -26,8 +28,8 @@ func (l *Powerball) Query_GetPowerballPurchaseAddr(param *pty.ReqPowerballInfo) 
 		return nil, err
 	}
 	reply := &pty.ReplyPowerballPurchaseAddr{}
-	for addr := range powerball.Records {
-		reply.Address = append(reply.Address, addr)
+	for _, info := range powerball.PurInfos {
+		reply.Address = append(reply.Address, info.Addr)
 	}
 	//powerball.Records
 	return reply, nil
@@ -38,8 +40,10 @@ func (l *Powerball) Query_GetPowerballCurrentInfo(param *pty.ReqPowerballInfo) (
 	if err != nil {
 		return nil, err
 	}
-	reply := &pty.ReplyPowerballCurrentInfo{Status: powerball.Status,
-		Fund:                       powerball.Fund,
+	reply := &pty.ReplyPowerballCurrentInfo{
+		Status:                     powerball.Status,
+		TotalFund:                  powerball.TotalFund,
+		SaleFund:                   powerball.SaleFund,
 		LastTransToPurState:        powerball.LastTransToPurState,
 		LastTransToDrawState:       powerball.LastTransToDrawState,
 		TotalPurchasedTxNum:        powerball.TotalPurchasedTxNum,
@@ -47,8 +51,8 @@ func (l *Powerball) Query_GetPowerballCurrentInfo(param *pty.ReqPowerballInfo) (
 		LuckyNumber:                powerball.LuckyNumber,
 		LastTransToPurStateOnMain:  powerball.LastTransToPurStateOnMain,
 		LastTransToDrawStateOnMain: powerball.LastTransToDrawStateOnMain,
-		PurBlockNum:                powerball.PurBlockNum,
-		DrawBlockNum:               powerball.DrawBlockNum,
+		PurTime:                    powerball.PurTime,
+		DrawTime:                   powerball.DrawTime,
 		MissingRecords:             powerball.MissingRecords,
 	}
 	return reply, nil

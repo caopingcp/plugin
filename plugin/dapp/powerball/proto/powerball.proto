@@ -4,35 +4,42 @@ package types;
 
 message PurchaseRecord {
     int64 amount = 1;
-    int64 number = 2;
+    BallNumber number = 2;
     int64 index  = 3;
-    int64 way    = 4;
 }
 
-message PurchaseRecords {
-    repeated PurchaseRecord record         = 1;
-    int64                   fundWin        = 2;
-    int64                   amountOneRound = 3;
+message PurchaseInfo {
+    string                  addr           = 1;
+	repeated PurchaseRecord records        = 2;
+	int64                   fundWin        = 3;
+    int64                   amountOneRound = 4;
+	repeated int64          prizeOneRound  = 5;
 }
 
 message Powerball {
     string                       powerballId                = 1;
     int32                        status                     = 2;
     int64                        createHeight               = 3;
-    int64                        fund                       = 4;
-    int64                        purBlockNum                = 5;
-    int64                        drawBlockNum               = 6;
-    int64                        lastTransToPurState        = 7;
-    int64                        lastTransToDrawState       = 8;
-    map<string, PurchaseRecords> records                    = 9;
-    int64                        totalPurchasedTxNum        = 10;
-    string                       createAddr                 = 11;
-    int64                        round                      = 12;
-    int64                        luckyNumber                = 13;
-    int64                        createOnMain               = 14;
-    int64                        lastTransToPurStateOnMain  = 15;
-    int64                        lastTransToDrawStateOnMain = 16;
-    repeated MissingRecord missingRecords                   = 17;
+    int64                        totalFund                  = 4;
+    int64                        saleFund                   = 5;
+    string                       purTime                    = 6;
+    string                       drawTime                   = 7;
+    int64                        lastTransToPurState        = 8;
+    int64                        lastTransToDrawState       = 9;
+    repeated PurchaseInfo        purInfos                   = 10;
+    int64                        totalPurchasedTxNum        = 11;
+    string                       createAddr                 = 12;
+    int64                        round                      = 13;
+    BallNumber                   luckyNumber                = 14;
+    int64                        createOnMain               = 15;
+    int64                        lastTransToPurStateOnMain  = 16;
+    int64                        lastTransToDrawStateOnMain = 17;
+    repeated MissingRecord       missingRecords             = 18;
+    int64                        ticketPrice                = 19;
+}
+
+message BallNumber {
+	repeated string balls = 1;
 }
 
 message MissingRecord {
@@ -43,22 +50,27 @@ message PowerballAction {
     oneof value {
         PowerballCreate create = 1;
         PowerballBuy    buy    = 2;
-        PowerballDraw   draw   = 3;
-        PowerballClose  close  = 4;
+		PowerballPause  pause  = 3;
+        PowerballDraw   draw   = 4;
+        PowerballClose  close  = 5;
     }
     int32 ty = 10;
 }
 
 message PowerballCreate {
-    int64 purBlockNum  = 1;
-    int64 drawBlockNum = 2;
+    string purTime     = 1;
+    string drawTime    = 2;
+    int64  ticketPrice = 3;
 }
 
 message PowerballBuy {
     string powerballId = 1;
     int64  amount    = 2;
-    int64  number    = 3;
-    int64  way       = 4;
+    BallNumber  number    = 3;
+}
+
+message PowerballPause {
+    string powerballId = 1;
 }
 
 message PowerballDraw {
@@ -75,14 +87,13 @@ message ReceiptPowerball {
     int32                prevStatus  = 3;
     string               addr        = 4;
     int64                round       = 5;
-    int64                number      = 6;
+    BallNumber           number      = 6;
     int64                amount      = 7;
-    int64                luckyNumber = 8;
+    BallNumber           luckyNumber = 8;
     int64                time        = 9;
     string               txHash      = 10;
     PowerballUpdateBuyInfo updateInfo  = 11;
-    int64                way         = 12;
-    int64                index       = 13;
+    int64                index       = 12;
 }
 
 message ReqPowerballInfo {
@@ -118,28 +129,30 @@ message ReqPowerballLuckyHistory {
 
 message ReplyPowerballNormalInfo {
     int64  createHeight = 1;
-    int64  purBlockNum  = 2;
-    int64  drawBlockNum = 3;
-    string createAddr   = 4;
+    string purTime      = 2;
+    string drawTime     = 3;
+    int64  ticketPrice  = 4;
+    string createAddr   = 5;
 }
 
 message ReplyPowerballCurrentInfo {
     int32    status                       = 1;
-    int64    fund                         = 2;
-    int64    lastTransToPurState          = 3;
-    int64    lastTransToDrawState         = 4;
-    int64    totalPurchasedTxNum          = 5;
-    int64    round                        = 6;
-    int64    luckyNumber                  = 7;
-    int64    lastTransToPurStateOnMain    = 8;
-    int64    lastTransToDrawStateOnMain   = 9;
-    int64    purBlockNum                  = 10;
-    int64    drawBlockNum                 = 11;
-    repeated MissingRecord missingRecords = 12;
+    int64    totalFund                    = 2;
+    int64    saleFund                     = 3;
+    int64    lastTransToPurState          = 4;
+    int64    lastTransToDrawState         = 5;
+    int64    totalPurchasedTxNum          = 6;
+    int64    round                        = 7;
+    BallNumber luckyNumber                = 8;
+    int64    lastTransToPurStateOnMain    = 9;
+    int64    lastTransToDrawStateOnMain   = 10;
+    string   purTime                      = 11;
+    string   drawTime                     = 12;
+    repeated MissingRecord missingRecords = 13;
 }
 
 message ReplyPowerballHistoryLuckyNumber {
-    repeated int64 luckyNumber = 1;
+    repeated BallNumber luckyNumber = 1;
 }
 
 message ReplyPowerballShowInfo {
@@ -147,20 +160,19 @@ message ReplyPowerballShowInfo {
 }
 
 message PowerballNumberRecord {
-    int64 number = 1;
+    BallNumber number = 1;
     int64 amount = 2;
 }
 
 // used for execlocal
 message PowerballBuyRecord {
-    int64  number = 1;
+    BallNumber  number = 1;
     int64  amount = 2;
     int64  round  = 3;
-    int64  type   = 4;
-    int64  way    = 5;
-    int64  index  = 6;
-    int64  time   = 7;
-    string txHash = 8;
+    int32  type   = 4;
+    int64  index  = 5;
+    int64  time   = 6;
+    string txHash = 7;
 }
 
 message PowerballBuyRecords {
@@ -168,7 +180,7 @@ message PowerballBuyRecords {
 }
 
 message PowerballDrawRecord {
-    int64  number = 1;
+    BallNumber number = 1;
     int64  round  = 2;
     int64  time   = 3;
     string txHash = 4;
@@ -180,15 +192,16 @@ message PowerballDrawRecords {
 
 message PowerballUpdateRec {
     int64 index = 1;
-    int64 type  = 2;
+    int32 type  = 2;
 }
 
 message PowerballUpdateRecs {
-    repeated PowerballUpdateRec records = 1;
+    string                      addr    = 1;
+    repeated PowerballUpdateRec records = 2;
 }
 
 message PowerballUpdateBuyInfo {
-    map<string, PowerballUpdateRecs> buyInfo = 1;
+    repeated PowerballUpdateRecs updates = 1;
 }
 
 message ReplyPowerballPurchaseAddr {

@@ -8,8 +8,10 @@ const PowerballX = "powerball"
 
 //Powerball status
 const (
-	PowerballCreated = 1 + iota
+	PowerballNil = iota
+	PowerballCreated
 	PowerballPurchase
+	PowerballPaused
 	PowerballDrawed
 	PowerballClosed
 )
@@ -18,12 +20,14 @@ const (
 const (
 	PowerballActionCreate = 1 + iota
 	PowerballActionBuy
+	PowerballActionPause
 	PowerballActionDraw
 	PowerballActionClose
 
 	//log for powerball
 	TyLogPowerballCreate = 801
 	TyLogPowerballBuy    = 802
-	TyLogPowerballDraw   = 803
-	TyLogPowerballClose  = 804
+	TyLogPowerballPause  = 803
+	TyLogPowerballDraw   = 804
+	TyLogPowerballClose  = 805
 )

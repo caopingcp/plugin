@@ -9,12 +9,14 @@ It is generated from these files:
 
 It has these top-level messages:
 	PurchaseRecord
-	PurchaseRecords
+	PurchaseInfo
 	Powerball
+	BallNumber
 	MissingRecord
 	PowerballAction
 	PowerballCreate
 	PowerballBuy
+	PowerballPause
 	PowerballDraw
 	PowerballClose
 	ReceiptPowerball
@@ -55,10 +57,9 @@ var _ = math.Inf
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type PurchaseRecord struct {
-	Amount int64 `protobuf:"varint,1,opt,name=amount" json:"amount,omitempty"`
-	Number int64 `protobuf:"varint,2,opt,name=number" json:"number,omitempty"`
-	Index  int64 `protobuf:"varint,3,opt,name=index" json:"index,omitempty"`
-	Way    int64 `protobuf:"varint,4,opt,name=way" json:"way,omitempty"`
+	Amount int64       `protobuf:"varint,1,opt,name=amount" json:"amount,omitempty"`
+	Number *BallNumber `protobuf:"bytes,2,opt,name=number" json:"number,omitempty"`
+	Index  int64       `protobuf:"varint,3,opt,name=index" json:"index,omitempty"`
 }
 
 func (m *PurchaseRecord) Reset()                    { *m = PurchaseRecord{} }
@@ -73,11 +74,11 @@ func (m *PurchaseRecord) GetAmount() int64 {
 	return 0
 }
 
-func (m *PurchaseRecord) GetNumber() int64 {
+func (m *PurchaseRecord) GetNumber() *BallNumber {
 	if m != nil {
 		return m.Number
 	}
-	return 0
+	return nil
 }
 
 func (m *PurchaseRecord) GetIndex() int64 {
@@ -87,63 +88,74 @@ func (m *PurchaseRecord) GetIndex() int64 {
 	return 0
 }
 
-func (m *PurchaseRecord) GetWay() int64 {
+type PurchaseInfo struct {
+	Addr           string            `protobuf:"bytes,1,opt,name=addr" json:"addr,omitempty"`
+	Records        []*PurchaseRecord `protobuf:"bytes,2,rep,name=records" json:"records,omitempty"`
+	FundWin        int64             `protobuf:"varint,3,opt,name=fundWin" json:"fundWin,omitempty"`
+	AmountOneRound int64             `protobuf:"varint,4,opt,name=amountOneRound" json:"amountOneRound,omitempty"`
+	PrizeOneRound  []int64           `protobuf:"varint,5,rep,packed,name=prizeOneRound" json:"prizeOneRound,omitempty"`
+}
+
+func (m *PurchaseInfo) Reset()                    { *m = PurchaseInfo{} }
+func (m *PurchaseInfo) String() string            { return proto.CompactTextString(m) }
+func (*PurchaseInfo) ProtoMessage()               {}
+func (*PurchaseInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
+
+func (m *PurchaseInfo) GetAddr() string {
 	if m != nil {
-		return m.Way
+		return m.Addr
 	}
-	return 0
+	return ""
 }
 
-type PurchaseRecords struct {
-	Record         []*PurchaseRecord `protobuf:"bytes,1,rep,name=record" json:"record,omitempty"`
-	FundWin        int64             `protobuf:"varint,2,opt,name=fundWin" json:"fundWin,omitempty"`
-	AmountOneRound int64             `protobuf:"varint,3,opt,name=amountOneRound" json:"amountOneRound,omitempty"`
-}
-
-func (m *PurchaseRecords) Reset()                    { *m = PurchaseRecords{} }
-func (m *PurchaseRecords) String() string            { return proto.CompactTextString(m) }
-func (*PurchaseRecords) ProtoMessage()               {}
-func (*PurchaseRecords) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
-
-func (m *PurchaseRecords) GetRecord() []*PurchaseRecord {
+func (m *PurchaseInfo) GetRecords() []*PurchaseRecord {
 	if m != nil {
-		return m.Record
+		return m.Records
 	}
 	return nil
 }
 
-func (m *PurchaseRecords) GetFundWin() int64 {
+func (m *PurchaseInfo) GetFundWin() int64 {
 	if m != nil {
 		return m.FundWin
 	}
 	return 0
 }
 
-func (m *PurchaseRecords) GetAmountOneRound() int64 {
+func (m *PurchaseInfo) GetAmountOneRound() int64 {
 	if m != nil {
 		return m.AmountOneRound
 	}
 	return 0
 }
 
+func (m *PurchaseInfo) GetPrizeOneRound() []int64 {
+	if m != nil {
+		return m.PrizeOneRound
+	}
+	return nil
+}
+
 type Powerball struct {
-	PowerballId                string                      `protobuf:"bytes,1,opt,name=powerballId" json:"powerballId,omitempty"`
-	Status                     int32                       `protobuf:"varint,2,opt,name=status" json:"status,omitempty"`
-	CreateHeight               int64                       `protobuf:"varint,3,opt,name=createHeight" json:"createHeight,omitempty"`
-	Fund                       int64                       `protobuf:"varint,4,opt,name=fund" json:"fund,omitempty"`
-	PurBlockNum                int64                       `protobuf:"varint,5,opt,name=purBlockNum" json:"purBlockNum,omitempty"`
-	DrawBlockNum               int64                       `protobuf:"varint,6,opt,name=drawBlockNum" json:"drawBlockNum,omitempty"`
-	LastTransToPurState        int64                       `protobuf:"varint,7,opt,name=lastTransToPurState" json:"lastTransToPurState,omitempty"`
-	LastTransToDrawState       int64                       `protobuf:"varint,8,opt,name=lastTransToDrawState" json:"lastTransToDrawState,omitempty"`
-	Records                    map[string]*PurchaseRecords `protobuf:"bytes,9,rep,name=records" json:"records,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	TotalPurchasedTxNum        int64                       `protobuf:"varint,10,opt,name=totalPurchasedTxNum" json:"totalPurchasedTxNum,omitempty"`
-	CreateAddr                 string                      `protobuf:"bytes,11,opt,name=createAddr" json:"createAddr,omitempty"`
-	Round                      int64                       `protobuf:"varint,12,opt,name=round" json:"round,omitempty"`
-	LuckyNumber                int64                       `protobuf:"varint,13,opt,name=luckyNumber" json:"luckyNumber,omitempty"`
-	CreateOnMain               int64                       `protobuf:"varint,14,opt,name=createOnMain" json:"createOnMain,omitempty"`
-	LastTransToPurStateOnMain  int64                       `protobuf:"varint,15,opt,name=lastTransToPurStateOnMain" json:"lastTransToPurStateOnMain,omitempty"`
-	LastTransToDrawStateOnMain int64                       `protobuf:"varint,16,opt,name=lastTransToDrawStateOnMain" json:"lastTransToDrawStateOnMain,omitempty"`
-	MissingRecords             []*MissingRecord            `protobuf:"bytes,17,rep,name=missingRecords" json:"missingRecords,omitempty"`
+	PowerballId                string           `protobuf:"bytes,1,opt,name=powerballId" json:"powerballId,omitempty"`
+	Status                     int32            `protobuf:"varint,2,opt,name=status" json:"status,omitempty"`
+	CreateHeight               int64            `protobuf:"varint,3,opt,name=createHeight" json:"createHeight,omitempty"`
+	TotalFund                  int64            `protobuf:"varint,4,opt,name=totalFund" json:"totalFund,omitempty"`
+	SaleFund                   int64            `protobuf:"varint,5,opt,name=saleFund" json:"saleFund,omitempty"`
+	PurTime                    string           `protobuf:"bytes,6,opt,name=purTime" json:"purTime,omitempty"`
+	DrawTime                   string           `protobuf:"bytes,7,opt,name=drawTime" json:"drawTime,omitempty"`
+	LastTransToPurState        int64            `protobuf:"varint,8,opt,name=lastTransToPurState" json:"lastTransToPurState,omitempty"`
+	LastTransToDrawState       int64            `protobuf:"varint,9,opt,name=lastTransToDrawState" json:"lastTransToDrawState,omitempty"`
+	PurInfos                   []*PurchaseInfo  `protobuf:"bytes,10,rep,name=purInfos" json:"purInfos,omitempty"`
+	TotalPurchasedTxNum        int64            `protobuf:"varint,11,opt,name=totalPurchasedTxNum" json:"totalPurchasedTxNum,omitempty"`
+	CreateAddr                 string           `protobuf:"bytes,12,opt,name=createAddr" json:"createAddr,omitempty"`
+	Round                      int64            `protobuf:"varint,13,opt,name=round" json:"round,omitempty"`
+	LuckyNumber                *BallNumber      `protobuf:"bytes,14,opt,name=luckyNumber" json:"luckyNumber,omitempty"`
+	CreateOnMain               int64            `protobuf:"varint,15,opt,name=createOnMain" json:"createOnMain,omitempty"`
+	LastTransToPurStateOnMain  int64            `protobuf:"varint,16,opt,name=lastTransToPurStateOnMain" json:"lastTransToPurStateOnMain,omitempty"`
+	LastTransToDrawStateOnMain int64            `protobuf:"varint,17,opt,name=lastTransToDrawStateOnMain" json:"lastTransToDrawStateOnMain,omitempty"`
+	MissingRecords             []*MissingRecord `protobuf:"bytes,18,rep,name=missingRecords" json:"missingRecords,omitempty"`
+	TicketPrice                int64            `protobuf:"varint,19,opt,name=ticketPrice" json:"ticketPrice,omitempty"`
 }
 
 func (m *Powerball) Reset()                    { *m = Powerball{} }
@@ -172,25 +184,32 @@ func (m *Powerball) GetCreateHeight() int64 {
 	return 0
 }
 
-func (m *Powerball) GetFund() int64 {
+func (m *Powerball) GetTotalFund() int64 {
 	if m != nil {
-		return m.Fund
+		return m.TotalFund
 	}
 	return 0
 }
 
-func (m *Powerball) GetPurBlockNum() int64 {
+func (m *Powerball) GetSaleFund() int64 {
 	if m != nil {
-		return m.PurBlockNum
+		return m.SaleFund
 	}
 	return 0
 }
 
-func (m *Powerball) GetDrawBlockNum() int64 {
+func (m *Powerball) GetPurTime() string {
 	if m != nil {
-		return m.DrawBlockNum
+		return m.PurTime
 	}
-	return 0
+	return ""
+}
+
+func (m *Powerball) GetDrawTime() string {
+	if m != nil {
+		return m.DrawTime
+	}
+	return ""
 }
 
 func (m *Powerball) GetLastTransToPurState() int64 {
@@ -207,9 +226,9 @@ func (m *Powerball) GetLastTransToDrawState() int64 {
 	return 0
 }
 
-func (m *Powerball) GetRecords() map[string]*PurchaseRecords {
+func (m *Powerball) GetPurInfos() []*PurchaseInfo {
 	if m != nil {
-		return m.Records
+		return m.PurInfos
 	}
 	return nil
 }
@@ -235,11 +254,11 @@ func (m *Powerball) GetRound() int64 {
 	return 0
 }
 
-func (m *Powerball) GetLuckyNumber() int64 {
+func (m *Powerball) GetLuckyNumber() *BallNumber {
 	if m != nil {
 		return m.LuckyNumber
 	}
-	return 0
+	return nil
 }
 
 func (m *Powerball) GetCreateOnMain() int64 {
@@ -270,6 +289,29 @@ func (m *Powerball) GetMissingRecords() []*MissingRecord {
 	return nil
 }
 
+func (m *Powerball) GetTicketPrice() int64 {
+	if m != nil {
+		return m.TicketPrice
+	}
+	return 0
+}
+
+type BallNumber struct {
+	Balls []string `protobuf:"bytes,1,rep,name=balls" json:"balls,omitempty"`
+}
+
+func (m *BallNumber) Reset()                    { *m = BallNumber{} }
+func (m *BallNumber) String() string            { return proto.CompactTextString(m) }
+func (*BallNumber) ProtoMessage()               {}
+func (*BallNumber) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
+
+func (m *BallNumber) GetBalls() []string {
+	if m != nil {
+		return m.Balls
+	}
+	return nil
+}
+
 type MissingRecord struct {
 	Times []int32 `protobuf:"varint,1,rep,packed,name=times" json:"times,omitempty"`
 }
@@ -277,7 +319,7 @@ type MissingRecord struct {
 func (m *MissingRecord) Reset()                    { *m = MissingRecord{} }
 func (m *MissingRecord) String() string            { return proto.CompactTextString(m) }
 func (*MissingRecord) ProtoMessage()               {}
-func (*MissingRecord) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
+func (*MissingRecord) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
 
 func (m *MissingRecord) GetTimes() []int32 {
 	if m != nil {
@@ -290,6 +332,7 @@ type PowerballAction struct {
 	// Types that are valid to be assigned to Value:
 	//	*PowerballAction_Create
 	//	*PowerballAction_Buy
+	//	*PowerballAction_Pause
 	//	*PowerballAction_Draw
 	//	*PowerballAction_Close
 	Value isPowerballAction_Value `protobuf_oneof:"value"`
@@ -299,7 +342,7 @@ type PowerballAction struct {
 func (m *PowerballAction) Reset()                    { *m = PowerballAction{} }
 func (m *PowerballAction) String() string            { return proto.CompactTextString(m) }
 func (*PowerballAction) ProtoMessage()               {}
-func (*PowerballAction) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
+func (*PowerballAction) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
 
 type isPowerballAction_Value interface {
 	isPowerballAction_Value()
@@ -311,15 +354,19 @@ type PowerballAction_Create struct {
 type PowerballAction_Buy struct {
 	Buy *PowerballBuy `protobuf:"bytes,2,opt,name=buy,oneof"`
 }
+type PowerballAction_Pause struct {
+	Pause *PowerballPause `protobuf:"bytes,3,opt,name=pause,oneof"`
+}
 type PowerballAction_Draw struct {
-	Draw *PowerballDraw `protobuf:"bytes,3,opt,name=draw,oneof"`
+	Draw *PowerballDraw `protobuf:"bytes,4,opt,name=draw,oneof"`
 }
 type PowerballAction_Close struct {
-	Close *PowerballClose `protobuf:"bytes,4,opt,name=close,oneof"`
+	Close *PowerballClose `protobuf:"bytes,5,opt,name=close,oneof"`
 }
 
 func (*PowerballAction_Create) isPowerballAction_Value() {}
 func (*PowerballAction_Buy) isPowerballAction_Value()    {}
+func (*PowerballAction_Pause) isPowerballAction_Value()  {}
 func (*PowerballAction_Draw) isPowerballAction_Value()   {}
 func (*PowerballAction_Close) isPowerballAction_Value()  {}
 
@@ -340,6 +387,13 @@ func (m *PowerballAction) GetCreate() *PowerballCreate {
 func (m *PowerballAction) GetBuy() *PowerballBuy {
 	if x, ok := m.GetValue().(*PowerballAction_Buy); ok {
 		return x.Buy
+	}
+	return nil
+}
+
+func (m *PowerballAction) GetPause() *PowerballPause {
+	if x, ok := m.GetValue().(*PowerballAction_Pause); ok {
+		return x.Pause
 	}
 	return nil
 }
@@ -370,6 +424,7 @@ func (*PowerballAction) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffe
 	return _PowerballAction_OneofMarshaler, _PowerballAction_OneofUnmarshaler, _PowerballAction_OneofSizer, []interface{}{
 		(*PowerballAction_Create)(nil),
 		(*PowerballAction_Buy)(nil),
+		(*PowerballAction_Pause)(nil),
 		(*PowerballAction_Draw)(nil),
 		(*PowerballAction_Close)(nil),
 	}
@@ -389,13 +444,18 @@ func _PowerballAction_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
 		if err := b.EncodeMessage(x.Buy); err != nil {
 			return err
 		}
-	case *PowerballAction_Draw:
+	case *PowerballAction_Pause:
 		b.EncodeVarint(3<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.Pause); err != nil {
+			return err
+		}
+	case *PowerballAction_Draw:
+		b.EncodeVarint(4<<3 | proto.WireBytes)
 		if err := b.EncodeMessage(x.Draw); err != nil {
 			return err
 		}
 	case *PowerballAction_Close:
-		b.EncodeVarint(4<<3 | proto.WireBytes)
+		b.EncodeVarint(5<<3 | proto.WireBytes)
 		if err := b.EncodeMessage(x.Close); err != nil {
 			return err
 		}
@@ -425,7 +485,15 @@ func _PowerballAction_OneofUnmarshaler(msg proto.Message, tag, wire int, b *prot
 		err := b.DecodeMessage(msg)
 		m.Value = &PowerballAction_Buy{msg}
 		return true, err
-	case 3: // value.draw
+	case 3: // value.pause
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(PowerballPause)
+		err := b.DecodeMessage(msg)
+		m.Value = &PowerballAction_Pause{msg}
+		return true, err
+	case 4: // value.draw
 		if wire != proto.WireBytes {
 			return true, proto.ErrInternalBadWireType
 		}
@@ -433,7 +501,7 @@ func _PowerballAction_OneofUnmarshaler(msg proto.Message, tag, wire int, b *prot
 		err := b.DecodeMessage(msg)
 		m.Value = &PowerballAction_Draw{msg}
 		return true, err
-	case 4: // value.close
+	case 5: // value.close
 		if wire != proto.WireBytes {
 			return true, proto.ErrInternalBadWireType
 		}
@@ -460,14 +528,19 @@ func _PowerballAction_OneofSizer(msg proto.Message) (n int) {
 		n += proto.SizeVarint(2<<3 | proto.WireBytes)
 		n += proto.SizeVarint(uint64(s))
 		n += s
+	case *PowerballAction_Pause:
+		s := proto.Size(x.Pause)
+		n += proto.SizeVarint(3<<3 | proto.WireBytes)
+		n += proto.SizeVarint(uint64(s))
+		n += s
 	case *PowerballAction_Draw:
 		s := proto.Size(x.Draw)
-		n += proto.SizeVarint(3<<3 | proto.WireBytes)
+		n += proto.SizeVarint(4<<3 | proto.WireBytes)
 		n += proto.SizeVarint(uint64(s))
 		n += s
 	case *PowerballAction_Close:
 		s := proto.Size(x.Close)
-		n += proto.SizeVarint(4<<3 | proto.WireBytes)
+		n += proto.SizeVarint(5<<3 | proto.WireBytes)
 		n += proto.SizeVarint(uint64(s))
 		n += s
 	case nil:
@@ -478,40 +551,47 @@ func _PowerballAction_OneofSizer(msg proto.Message) (n int) {
 }
 
 type PowerballCreate struct {
-	PurBlockNum  int64 `protobuf:"varint,1,opt,name=purBlockNum" json:"purBlockNum,omitempty"`
-	DrawBlockNum int64 `protobuf:"varint,2,opt,name=drawBlockNum" json:"drawBlockNum,omitempty"`
+	PurTime     string `protobuf:"bytes,1,opt,name=purTime" json:"purTime,omitempty"`
+	DrawTime    string `protobuf:"bytes,2,opt,name=drawTime" json:"drawTime,omitempty"`
+	TicketPrice int64  `protobuf:"varint,3,opt,name=ticketPrice" json:"ticketPrice,omitempty"`
 }
 
 func (m *PowerballCreate) Reset()                    { *m = PowerballCreate{} }
 func (m *PowerballCreate) String() string            { return proto.CompactTextString(m) }
 func (*PowerballCreate) ProtoMessage()               {}
-func (*PowerballCreate) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
+func (*PowerballCreate) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
 
-func (m *PowerballCreate) GetPurBlockNum() int64 {
+func (m *PowerballCreate) GetPurTime() string {
 	if m != nil {
-		return m.PurBlockNum
+		return m.PurTime
 	}
-	return 0
+	return ""
 }
 
-func (m *PowerballCreate) GetDrawBlockNum() int64 {
+func (m *PowerballCreate) GetDrawTime() string {
 	if m != nil {
-		return m.DrawBlockNum
+		return m.DrawTime
+	}
+	return ""
+}
+
+func (m *PowerballCreate) GetTicketPrice() int64 {
+	if m != nil {
+		return m.TicketPrice
 	}
 	return 0
 }
 
 type PowerballBuy struct {
-	PowerballId string `protobuf:"bytes,1,opt,name=powerballId" json:"powerballId,omitempty"`
-	Amount      int64  `protobuf:"varint,2,opt,name=amount" json:"amount,omitempty"`
-	Number      int64  `protobuf:"varint,3,opt,name=number" json:"number,omitempty"`
-	Way         int64  `protobuf:"varint,4,opt,name=way" json:"way,omitempty"`
+	PowerballId string      `protobuf:"bytes,1,opt,name=powerballId" json:"powerballId,omitempty"`
+	Amount      int64       `protobuf:"varint,2,opt,name=amount" json:"amount,omitempty"`
+	Number      *BallNumber `protobuf:"bytes,3,opt,name=number" json:"number,omitempty"`
 }
 
 func (m *PowerballBuy) Reset()                    { *m = PowerballBuy{} }
 func (m *PowerballBuy) String() string            { return proto.CompactTextString(m) }
 func (*PowerballBuy) ProtoMessage()               {}
-func (*PowerballBuy) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
+func (*PowerballBuy) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
 
 func (m *PowerballBuy) GetPowerballId() string {
 	if m != nil {
@@ -527,18 +607,27 @@ func (m *PowerballBuy) GetAmount() int64 {
 	return 0
 }
 
-func (m *PowerballBuy) GetNumber() int64 {
+func (m *PowerballBuy) GetNumber() *BallNumber {
 	if m != nil {
 		return m.Number
 	}
-	return 0
+	return nil
 }
 
-func (m *PowerballBuy) GetWay() int64 {
+type PowerballPause struct {
+	PowerballId string `protobuf:"bytes,1,opt,name=powerballId" json:"powerballId,omitempty"`
+}
+
+func (m *PowerballPause) Reset()                    { *m = PowerballPause{} }
+func (m *PowerballPause) String() string            { return proto.CompactTextString(m) }
+func (*PowerballPause) ProtoMessage()               {}
+func (*PowerballPause) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{8} }
+
+func (m *PowerballPause) GetPowerballId() string {
 	if m != nil {
-		return m.Way
+		return m.PowerballId
 	}
-	return 0
+	return ""
 }
 
 type PowerballDraw struct {
@@ -548,7 +637,7 @@ type PowerballDraw struct {
 func (m *PowerballDraw) Reset()                    { *m = PowerballDraw{} }
 func (m *PowerballDraw) String() string            { return proto.CompactTextString(m) }
 func (*PowerballDraw) ProtoMessage()               {}
-func (*PowerballDraw) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
+func (*PowerballDraw) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{9} }
 
 func (m *PowerballDraw) GetPowerballId() string {
 	if m != nil {
@@ -564,7 +653,7 @@ type PowerballClose struct {
 func (m *PowerballClose) Reset()                    { *m = PowerballClose{} }
 func (m *PowerballClose) String() string            { return proto.CompactTextString(m) }
 func (*PowerballClose) ProtoMessage()               {}
-func (*PowerballClose) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{8} }
+func (*PowerballClose) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{10} }
 
 func (m *PowerballClose) GetPowerballId() string {
 	if m != nil {
@@ -579,20 +668,19 @@ type ReceiptPowerball struct {
 	PrevStatus  int32                   `protobuf:"varint,3,opt,name=prevStatus" json:"prevStatus,omitempty"`
 	Addr        string                  `protobuf:"bytes,4,opt,name=addr" json:"addr,omitempty"`
 	Round       int64                   `protobuf:"varint,5,opt,name=round" json:"round,omitempty"`
-	Number      int64                   `protobuf:"varint,6,opt,name=number" json:"number,omitempty"`
+	Number      *BallNumber             `protobuf:"bytes,6,opt,name=number" json:"number,omitempty"`
 	Amount      int64                   `protobuf:"varint,7,opt,name=amount" json:"amount,omitempty"`
-	LuckyNumber int64                   `protobuf:"varint,8,opt,name=luckyNumber" json:"luckyNumber,omitempty"`
+	LuckyNumber *BallNumber             `protobuf:"bytes,8,opt,name=luckyNumber" json:"luckyNumber,omitempty"`
 	Time        int64                   `protobuf:"varint,9,opt,name=time" json:"time,omitempty"`
 	TxHash      string                  `protobuf:"bytes,10,opt,name=txHash" json:"txHash,omitempty"`
 	UpdateInfo  *PowerballUpdateBuyInfo `protobuf:"bytes,11,opt,name=updateInfo" json:"updateInfo,omitempty"`
-	Way         int64                   `protobuf:"varint,12,opt,name=way" json:"way,omitempty"`
-	Index       int64                   `protobuf:"varint,13,opt,name=index" json:"index,omitempty"`
+	Index       int64                   `protobuf:"varint,12,opt,name=index" json:"index,omitempty"`
 }
 
 func (m *ReceiptPowerball) Reset()                    { *m = ReceiptPowerball{} }
 func (m *ReceiptPowerball) String() string            { return proto.CompactTextString(m) }
 func (*ReceiptPowerball) ProtoMessage()               {}
-func (*ReceiptPowerball) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{9} }
+func (*ReceiptPowerball) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{11} }
 
 func (m *ReceiptPowerball) GetPowerballId() string {
 	if m != nil {
@@ -629,11 +717,11 @@ func (m *ReceiptPowerball) GetRound() int64 {
 	return 0
 }
 
-func (m *ReceiptPowerball) GetNumber() int64 {
+func (m *ReceiptPowerball) GetNumber() *BallNumber {
 	if m != nil {
 		return m.Number
 	}
-	return 0
+	return nil
 }
 
 func (m *ReceiptPowerball) GetAmount() int64 {
@@ -643,11 +731,11 @@ func (m *ReceiptPowerball) GetAmount() int64 {
 	return 0
 }
 
-func (m *ReceiptPowerball) GetLuckyNumber() int64 {
+func (m *ReceiptPowerball) GetLuckyNumber() *BallNumber {
 	if m != nil {
 		return m.LuckyNumber
 	}
-	return 0
+	return nil
 }
 
 func (m *ReceiptPowerball) GetTime() int64 {
@@ -671,13 +759,6 @@ func (m *ReceiptPowerball) GetUpdateInfo() *PowerballUpdateBuyInfo {
 	return nil
 }
 
-func (m *ReceiptPowerball) GetWay() int64 {
-	if m != nil {
-		return m.Way
-	}
-	return 0
-}
-
 func (m *ReceiptPowerball) GetIndex() int64 {
 	if m != nil {
 		return m.Index
@@ -692,7 +773,7 @@ type ReqPowerballInfo struct {
 func (m *ReqPowerballInfo) Reset()                    { *m = ReqPowerballInfo{} }
 func (m *ReqPowerballInfo) String() string            { return proto.CompactTextString(m) }
 func (*ReqPowerballInfo) ProtoMessage()               {}
-func (*ReqPowerballInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{10} }
+func (*ReqPowerballInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{12} }
 
 func (m *ReqPowerballInfo) GetPowerballId() string {
 	if m != nil {
@@ -710,7 +791,7 @@ type ReqPowerballBuyInfo struct {
 func (m *ReqPowerballBuyInfo) Reset()                    { *m = ReqPowerballBuyInfo{} }
 func (m *ReqPowerballBuyInfo) String() string            { return proto.CompactTextString(m) }
 func (*ReqPowerballBuyInfo) ProtoMessage()               {}
-func (*ReqPowerballBuyInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{11} }
+func (*ReqPowerballBuyInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{13} }
 
 func (m *ReqPowerballBuyInfo) GetPowerballId() string {
 	if m != nil {
@@ -745,7 +826,7 @@ type ReqPowerballBuyHistory struct {
 func (m *ReqPowerballBuyHistory) Reset()                    { *m = ReqPowerballBuyHistory{} }
 func (m *ReqPowerballBuyHistory) String() string            { return proto.CompactTextString(m) }
 func (*ReqPowerballBuyHistory) ProtoMessage()               {}
-func (*ReqPowerballBuyHistory) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{12} }
+func (*ReqPowerballBuyHistory) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{14} }
 
 func (m *ReqPowerballBuyHistory) GetPowerballId() string {
 	if m != nil {
@@ -797,7 +878,7 @@ type ReqPowerballLuckyInfo struct {
 func (m *ReqPowerballLuckyInfo) Reset()                    { *m = ReqPowerballLuckyInfo{} }
 func (m *ReqPowerballLuckyInfo) String() string            { return proto.CompactTextString(m) }
 func (*ReqPowerballLuckyInfo) ProtoMessage()               {}
-func (*ReqPowerballLuckyInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{13} }
+func (*ReqPowerballLuckyInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{15} }
 
 func (m *ReqPowerballLuckyInfo) GetPowerballId() string {
 	if m != nil {
@@ -823,7 +904,7 @@ type ReqPowerballLuckyHistory struct {
 func (m *ReqPowerballLuckyHistory) Reset()                    { *m = ReqPowerballLuckyHistory{} }
 func (m *ReqPowerballLuckyHistory) String() string            { return proto.CompactTextString(m) }
 func (*ReqPowerballLuckyHistory) ProtoMessage()               {}
-func (*ReqPowerballLuckyHistory) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{14} }
+func (*ReqPowerballLuckyHistory) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{16} }
 
 func (m *ReqPowerballLuckyHistory) GetPowerballId() string {
 	if m != nil {
@@ -855,15 +936,16 @@ func (m *ReqPowerballLuckyHistory) GetDirection() int32 {
 
 type ReplyPowerballNormalInfo struct {
 	CreateHeight int64  `protobuf:"varint,1,opt,name=createHeight" json:"createHeight,omitempty"`
-	PurBlockNum  int64  `protobuf:"varint,2,opt,name=purBlockNum" json:"purBlockNum,omitempty"`
-	DrawBlockNum int64  `protobuf:"varint,3,opt,name=drawBlockNum" json:"drawBlockNum,omitempty"`
-	CreateAddr   string `protobuf:"bytes,4,opt,name=createAddr" json:"createAddr,omitempty"`
+	PurTime      string `protobuf:"bytes,2,opt,name=purTime" json:"purTime,omitempty"`
+	DrawTime     string `protobuf:"bytes,3,opt,name=drawTime" json:"drawTime,omitempty"`
+	TicketPrice  int64  `protobuf:"varint,4,opt,name=ticketPrice" json:"ticketPrice,omitempty"`
+	CreateAddr   string `protobuf:"bytes,5,opt,name=createAddr" json:"createAddr,omitempty"`
 }
 
 func (m *ReplyPowerballNormalInfo) Reset()                    { *m = ReplyPowerballNormalInfo{} }
 func (m *ReplyPowerballNormalInfo) String() string            { return proto.CompactTextString(m) }
 func (*ReplyPowerballNormalInfo) ProtoMessage()               {}
-func (*ReplyPowerballNormalInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{15} }
+func (*ReplyPowerballNormalInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{17} }
 
 func (m *ReplyPowerballNormalInfo) GetCreateHeight() int64 {
 	if m != nil {
@@ -872,16 +954,23 @@ func (m *ReplyPowerballNormalInfo) GetCreateHeight() int64 {
 	return 0
 }
 
-func (m *ReplyPowerballNormalInfo) GetPurBlockNum() int64 {
+func (m *ReplyPowerballNormalInfo) GetPurTime() string {
 	if m != nil {
-		return m.PurBlockNum
+		return m.PurTime
 	}
-	return 0
+	return ""
 }
 
-func (m *ReplyPowerballNormalInfo) GetDrawBlockNum() int64 {
+func (m *ReplyPowerballNormalInfo) GetDrawTime() string {
 	if m != nil {
-		return m.DrawBlockNum
+		return m.DrawTime
+	}
+	return ""
+}
+
+func (m *ReplyPowerballNormalInfo) GetTicketPrice() int64 {
+	if m != nil {
+		return m.TicketPrice
 	}
 	return 0
 }
@@ -895,23 +984,24 @@ func (m *ReplyPowerballNormalInfo) GetCreateAddr() string {
 
 type ReplyPowerballCurrentInfo struct {
 	Status                     int32            `protobuf:"varint,1,opt,name=status" json:"status,omitempty"`
-	Fund                       int64            `protobuf:"varint,2,opt,name=fund" json:"fund,omitempty"`
-	LastTransToPurState        int64            `protobuf:"varint,3,opt,name=lastTransToPurState" json:"lastTransToPurState,omitempty"`
-	LastTransToDrawState       int64            `protobuf:"varint,4,opt,name=lastTransToDrawState" json:"lastTransToDrawState,omitempty"`
-	TotalPurchasedTxNum        int64            `protobuf:"varint,5,opt,name=totalPurchasedTxNum" json:"totalPurchasedTxNum,omitempty"`
-	Round                      int64            `protobuf:"varint,6,opt,name=round" json:"round,omitempty"`
-	LuckyNumber                int64            `protobuf:"varint,7,opt,name=luckyNumber" json:"luckyNumber,omitempty"`
-	LastTransToPurStateOnMain  int64            `protobuf:"varint,8,opt,name=lastTransToPurStateOnMain" json:"lastTransToPurStateOnMain,omitempty"`
-	LastTransToDrawStateOnMain int64            `protobuf:"varint,9,opt,name=lastTransToDrawStateOnMain" json:"lastTransToDrawStateOnMain,omitempty"`
-	PurBlockNum                int64            `protobuf:"varint,10,opt,name=purBlockNum" json:"purBlockNum,omitempty"`
-	DrawBlockNum               int64            `protobuf:"varint,11,opt,name=drawBlockNum" json:"drawBlockNum,omitempty"`
-	MissingRecords             []*MissingRecord `protobuf:"bytes,12,rep,name=missingRecords" json:"missingRecords,omitempty"`
+	TotalFund                  int64            `protobuf:"varint,2,opt,name=totalFund" json:"totalFund,omitempty"`
+	SaleFund                   int64            `protobuf:"varint,3,opt,name=saleFund" json:"saleFund,omitempty"`
+	LastTransToPurState        int64            `protobuf:"varint,4,opt,name=lastTransToPurState" json:"lastTransToPurState,omitempty"`
+	LastTransToDrawState       int64            `protobuf:"varint,5,opt,name=lastTransToDrawState" json:"lastTransToDrawState,omitempty"`
+	TotalPurchasedTxNum        int64            `protobuf:"varint,6,opt,name=totalPurchasedTxNum" json:"totalPurchasedTxNum,omitempty"`
+	Round                      int64            `protobuf:"varint,7,opt,name=round" json:"round,omitempty"`
+	LuckyNumber                *BallNumber      `protobuf:"bytes,8,opt,name=luckyNumber" json:"luckyNumber,omitempty"`
+	LastTransToPurStateOnMain  int64            `protobuf:"varint,9,opt,name=lastTransToPurStateOnMain" json:"lastTransToPurStateOnMain,omitempty"`
+	LastTransToDrawStateOnMain int64            `protobuf:"varint,10,opt,name=lastTransToDrawStateOnMain" json:"lastTransToDrawStateOnMain,omitempty"`
+	PurTime                    string           `protobuf:"bytes,11,opt,name=purTime" json:"purTime,omitempty"`
+	DrawTime                   string           `protobuf:"bytes,12,opt,name=drawTime" json:"drawTime,omitempty"`
+	MissingRecords             []*MissingRecord `protobuf:"bytes,13,rep,name=missingRecords" json:"missingRecords,omitempty"`
 }
 
 func (m *ReplyPowerballCurrentInfo) Reset()                    { *m = ReplyPowerballCurrentInfo{} }
 func (m *ReplyPowerballCurrentInfo) String() string            { return proto.CompactTextString(m) }
 func (*ReplyPowerballCurrentInfo) ProtoMessage()               {}
-func (*ReplyPowerballCurrentInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{16} }
+func (*ReplyPowerballCurrentInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{18} }
 
 func (m *ReplyPowerballCurrentInfo) GetStatus() int32 {
 	if m != nil {
@@ -920,9 +1010,16 @@ func (m *ReplyPowerballCurrentInfo) GetStatus() int32 {
 	return 0
 }
 
-func (m *ReplyPowerballCurrentInfo) GetFund() int64 {
+func (m *ReplyPowerballCurrentInfo) GetTotalFund() int64 {
 	if m != nil {
-		return m.Fund
+		return m.TotalFund
+	}
+	return 0
+}
+
+func (m *ReplyPowerballCurrentInfo) GetSaleFund() int64 {
+	if m != nil {
+		return m.SaleFund
 	}
 	return 0
 }
@@ -955,11 +1052,11 @@ func (m *ReplyPowerballCurrentInfo) GetRound() int64 {
 	return 0
 }
 
-func (m *ReplyPowerballCurrentInfo) GetLuckyNumber() int64 {
+func (m *ReplyPowerballCurrentInfo) GetLuckyNumber() *BallNumber {
 	if m != nil {
 		return m.LuckyNumber
 	}
-	return 0
+	return nil
 }
 
 func (m *ReplyPowerballCurrentInfo) GetLastTransToPurStateOnMain() int64 {
@@ -976,18 +1073,18 @@ func (m *ReplyPowerballCurrentInfo) GetLastTransToDrawStateOnMain() int64 {
 	return 0
 }
 
-func (m *ReplyPowerballCurrentInfo) GetPurBlockNum() int64 {
+func (m *ReplyPowerballCurrentInfo) GetPurTime() string {
 	if m != nil {
-		return m.PurBlockNum
+		return m.PurTime
 	}
-	return 0
+	return ""
 }
 
-func (m *ReplyPowerballCurrentInfo) GetDrawBlockNum() int64 {
+func (m *ReplyPowerballCurrentInfo) GetDrawTime() string {
 	if m != nil {
-		return m.DrawBlockNum
+		return m.DrawTime
 	}
-	return 0
+	return ""
 }
 
 func (m *ReplyPowerballCurrentInfo) GetMissingRecords() []*MissingRecord {
@@ -998,17 +1095,17 @@ func (m *ReplyPowerballCurrentInfo) GetMissingRecords() []*MissingRecord {
 }
 
 type ReplyPowerballHistoryLuckyNumber struct {
-	LuckyNumber []int64 `protobuf:"varint,1,rep,packed,name=luckyNumber" json:"luckyNumber,omitempty"`
+	LuckyNumber []*BallNumber `protobuf:"bytes,1,rep,name=luckyNumber" json:"luckyNumber,omitempty"`
 }
 
 func (m *ReplyPowerballHistoryLuckyNumber) Reset()         { *m = ReplyPowerballHistoryLuckyNumber{} }
 func (m *ReplyPowerballHistoryLuckyNumber) String() string { return proto.CompactTextString(m) }
 func (*ReplyPowerballHistoryLuckyNumber) ProtoMessage()    {}
 func (*ReplyPowerballHistoryLuckyNumber) Descriptor() ([]byte, []int) {
-	return fileDescriptor0, []int{17}
+	return fileDescriptor0, []int{19}
 }
 
-func (m *ReplyPowerballHistoryLuckyNumber) GetLuckyNumber() []int64 {
+func (m *ReplyPowerballHistoryLuckyNumber) GetLuckyNumber() []*BallNumber {
 	if m != nil {
 		return m.LuckyNumber
 	}
@@ -1022,7 +1119,7 @@ type ReplyPowerballShowInfo struct {
 func (m *ReplyPowerballShowInfo) Reset()                    { *m = ReplyPowerballShowInfo{} }
 func (m *ReplyPowerballShowInfo) String() string            { return proto.CompactTextString(m) }
 func (*ReplyPowerballShowInfo) ProtoMessage()               {}
-func (*ReplyPowerballShowInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{18} }
+func (*ReplyPowerballShowInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{20} }
 
 func (m *ReplyPowerballShowInfo) GetRecords() []*PowerballBuyRecord {
 	if m != nil {
@@ -1032,20 +1129,20 @@ func (m *ReplyPowerballShowInfo) GetRecords() []*PowerballBuyRecord {
 }
 
 type PowerballNumberRecord struct {
-	Number int64 `protobuf:"varint,1,opt,name=number" json:"number,omitempty"`
-	Amount int64 `protobuf:"varint,2,opt,name=amount" json:"amount,omitempty"`
+	Number *BallNumber `protobuf:"bytes,1,opt,name=number" json:"number,omitempty"`
+	Amount int64       `protobuf:"varint,2,opt,name=amount" json:"amount,omitempty"`
 }
 
 func (m *PowerballNumberRecord) Reset()                    { *m = PowerballNumberRecord{} }
 func (m *PowerballNumberRecord) String() string            { return proto.CompactTextString(m) }
 func (*PowerballNumberRecord) ProtoMessage()               {}
-func (*PowerballNumberRecord) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{19} }
+func (*PowerballNumberRecord) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{21} }
 
-func (m *PowerballNumberRecord) GetNumber() int64 {
+func (m *PowerballNumberRecord) GetNumber() *BallNumber {
 	if m != nil {
 		return m.Number
 	}
-	return 0
+	return nil
 }
 
 func (m *PowerballNumberRecord) GetAmount() int64 {
@@ -1057,26 +1154,25 @@ func (m *PowerballNumberRecord) GetAmount() int64 {
 
 // used for execlocal
 type PowerballBuyRecord struct {
-	Number int64  `protobuf:"varint,1,opt,name=number" json:"number,omitempty"`
-	Amount int64  `protobuf:"varint,2,opt,name=amount" json:"amount,omitempty"`
-	Round  int64  `protobuf:"varint,3,opt,name=round" json:"round,omitempty"`
-	Type   int64  `protobuf:"varint,4,opt,name=type" json:"type,omitempty"`
-	Way    int64  `protobuf:"varint,5,opt,name=way" json:"way,omitempty"`
-	Index  int64  `protobuf:"varint,6,opt,name=index" json:"index,omitempty"`
-	Time   int64  `protobuf:"varint,7,opt,name=time" json:"time,omitempty"`
-	TxHash string `protobuf:"bytes,8,opt,name=txHash" json:"txHash,omitempty"`
+	Number *BallNumber `protobuf:"bytes,1,opt,name=number" json:"number,omitempty"`
+	Amount int64       `protobuf:"varint,2,opt,name=amount" json:"amount,omitempty"`
+	Round  int64       `protobuf:"varint,3,opt,name=round" json:"round,omitempty"`
+	Type   int32       `protobuf:"varint,4,opt,name=type" json:"type,omitempty"`
+	Index  int64       `protobuf:"varint,5,opt,name=index" json:"index,omitempty"`
+	Time   int64       `protobuf:"varint,6,opt,name=time" json:"time,omitempty"`
+	TxHash string      `protobuf:"bytes,7,opt,name=txHash" json:"txHash,omitempty"`
 }
 
 func (m *PowerballBuyRecord) Reset()                    { *m = PowerballBuyRecord{} }
 func (m *PowerballBuyRecord) String() string            { return proto.CompactTextString(m) }
 func (*PowerballBuyRecord) ProtoMessage()               {}
-func (*PowerballBuyRecord) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{20} }
+func (*PowerballBuyRecord) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{22} }
 
-func (m *PowerballBuyRecord) GetNumber() int64 {
+func (m *PowerballBuyRecord) GetNumber() *BallNumber {
 	if m != nil {
 		return m.Number
 	}
-	return 0
+	return nil
 }
 
 func (m *PowerballBuyRecord) GetAmount() int64 {
@@ -1093,16 +1189,9 @@ func (m *PowerballBuyRecord) GetRound() int64 {
 	return 0
 }
 
-func (m *PowerballBuyRecord) GetType() int64 {
+func (m *PowerballBuyRecord) GetType() int32 {
 	if m != nil {
 		return m.Type
-	}
-	return 0
-}
-
-func (m *PowerballBuyRecord) GetWay() int64 {
-	if m != nil {
-		return m.Way
 	}
 	return 0
 }
@@ -1135,7 +1224,7 @@ type PowerballBuyRecords struct {
 func (m *PowerballBuyRecords) Reset()                    { *m = PowerballBuyRecords{} }
 func (m *PowerballBuyRecords) String() string            { return proto.CompactTextString(m) }
 func (*PowerballBuyRecords) ProtoMessage()               {}
-func (*PowerballBuyRecords) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{21} }
+func (*PowerballBuyRecords) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{23} }
 
 func (m *PowerballBuyRecords) GetRecords() []*PowerballBuyRecord {
 	if m != nil {
@@ -1145,22 +1234,22 @@ func (m *PowerballBuyRecords) GetRecords() []*PowerballBuyRecord {
 }
 
 type PowerballDrawRecord struct {
-	Number int64  `protobuf:"varint,1,opt,name=number" json:"number,omitempty"`
-	Round  int64  `protobuf:"varint,2,opt,name=round" json:"round,omitempty"`
-	Time   int64  `protobuf:"varint,3,opt,name=time" json:"time,omitempty"`
-	TxHash string `protobuf:"bytes,4,opt,name=txHash" json:"txHash,omitempty"`
+	Number *BallNumber `protobuf:"bytes,1,opt,name=number" json:"number,omitempty"`
+	Round  int64       `protobuf:"varint,2,opt,name=round" json:"round,omitempty"`
+	Time   int64       `protobuf:"varint,3,opt,name=time" json:"time,omitempty"`
+	TxHash string      `protobuf:"bytes,4,opt,name=txHash" json:"txHash,omitempty"`
 }
 
 func (m *PowerballDrawRecord) Reset()                    { *m = PowerballDrawRecord{} }
 func (m *PowerballDrawRecord) String() string            { return proto.CompactTextString(m) }
 func (*PowerballDrawRecord) ProtoMessage()               {}
-func (*PowerballDrawRecord) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{22} }
+func (*PowerballDrawRecord) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{24} }
 
-func (m *PowerballDrawRecord) GetNumber() int64 {
+func (m *PowerballDrawRecord) GetNumber() *BallNumber {
 	if m != nil {
 		return m.Number
 	}
-	return 0
+	return nil
 }
 
 func (m *PowerballDrawRecord) GetRound() int64 {
@@ -1191,7 +1280,7 @@ type PowerballDrawRecords struct {
 func (m *PowerballDrawRecords) Reset()                    { *m = PowerballDrawRecords{} }
 func (m *PowerballDrawRecords) String() string            { return proto.CompactTextString(m) }
 func (*PowerballDrawRecords) ProtoMessage()               {}
-func (*PowerballDrawRecords) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{23} }
+func (*PowerballDrawRecords) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{25} }
 
 func (m *PowerballDrawRecords) GetRecords() []*PowerballDrawRecord {
 	if m != nil {
@@ -1202,13 +1291,13 @@ func (m *PowerballDrawRecords) GetRecords() []*PowerballDrawRecord {
 
 type PowerballUpdateRec struct {
 	Index int64 `protobuf:"varint,1,opt,name=index" json:"index,omitempty"`
-	Type  int64 `protobuf:"varint,2,opt,name=type" json:"type,omitempty"`
+	Type  int32 `protobuf:"varint,2,opt,name=type" json:"type,omitempty"`
 }
 
 func (m *PowerballUpdateRec) Reset()                    { *m = PowerballUpdateRec{} }
 func (m *PowerballUpdateRec) String() string            { return proto.CompactTextString(m) }
 func (*PowerballUpdateRec) ProtoMessage()               {}
-func (*PowerballUpdateRec) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{24} }
+func (*PowerballUpdateRec) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{26} }
 
 func (m *PowerballUpdateRec) GetIndex() int64 {
 	if m != nil {
@@ -1217,7 +1306,7 @@ func (m *PowerballUpdateRec) GetIndex() int64 {
 	return 0
 }
 
-func (m *PowerballUpdateRec) GetType() int64 {
+func (m *PowerballUpdateRec) GetType() int32 {
 	if m != nil {
 		return m.Type
 	}
@@ -1225,13 +1314,21 @@ func (m *PowerballUpdateRec) GetType() int64 {
 }
 
 type PowerballUpdateRecs struct {
-	Records []*PowerballUpdateRec `protobuf:"bytes,1,rep,name=records" json:"records,omitempty"`
+	Addr    string                `protobuf:"bytes,1,opt,name=addr" json:"addr,omitempty"`
+	Records []*PowerballUpdateRec `protobuf:"bytes,2,rep,name=records" json:"records,omitempty"`
 }
 
 func (m *PowerballUpdateRecs) Reset()                    { *m = PowerballUpdateRecs{} }
 func (m *PowerballUpdateRecs) String() string            { return proto.CompactTextString(m) }
 func (*PowerballUpdateRecs) ProtoMessage()               {}
-func (*PowerballUpdateRecs) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{25} }
+func (*PowerballUpdateRecs) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{27} }
+
+func (m *PowerballUpdateRecs) GetAddr() string {
+	if m != nil {
+		return m.Addr
+	}
+	return ""
+}
 
 func (m *PowerballUpdateRecs) GetRecords() []*PowerballUpdateRec {
 	if m != nil {
@@ -1241,17 +1338,17 @@ func (m *PowerballUpdateRecs) GetRecords() []*PowerballUpdateRec {
 }
 
 type PowerballUpdateBuyInfo struct {
-	BuyInfo map[string]*PowerballUpdateRecs `protobuf:"bytes,1,rep,name=buyInfo" json:"buyInfo,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Updates []*PowerballUpdateRecs `protobuf:"bytes,1,rep,name=updates" json:"updates,omitempty"`
 }
 
 func (m *PowerballUpdateBuyInfo) Reset()                    { *m = PowerballUpdateBuyInfo{} }
 func (m *PowerballUpdateBuyInfo) String() string            { return proto.CompactTextString(m) }
 func (*PowerballUpdateBuyInfo) ProtoMessage()               {}
-func (*PowerballUpdateBuyInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{26} }
+func (*PowerballUpdateBuyInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{28} }
 
-func (m *PowerballUpdateBuyInfo) GetBuyInfo() map[string]*PowerballUpdateRecs {
+func (m *PowerballUpdateBuyInfo) GetUpdates() []*PowerballUpdateRecs {
 	if m != nil {
-		return m.BuyInfo
+		return m.Updates
 	}
 	return nil
 }
@@ -1263,7 +1360,7 @@ type ReplyPowerballPurchaseAddr struct {
 func (m *ReplyPowerballPurchaseAddr) Reset()                    { *m = ReplyPowerballPurchaseAddr{} }
 func (m *ReplyPowerballPurchaseAddr) String() string            { return proto.CompactTextString(m) }
 func (*ReplyPowerballPurchaseAddr) ProtoMessage()               {}
-func (*ReplyPowerballPurchaseAddr) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{27} }
+func (*ReplyPowerballPurchaseAddr) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{29} }
 
 func (m *ReplyPowerballPurchaseAddr) GetAddress() []string {
 	if m != nil {
@@ -1274,12 +1371,14 @@ func (m *ReplyPowerballPurchaseAddr) GetAddress() []string {
 
 func init() {
 	proto.RegisterType((*PurchaseRecord)(nil), "types.PurchaseRecord")
-	proto.RegisterType((*PurchaseRecords)(nil), "types.PurchaseRecords")
+	proto.RegisterType((*PurchaseInfo)(nil), "types.PurchaseInfo")
 	proto.RegisterType((*Powerball)(nil), "types.Powerball")
+	proto.RegisterType((*BallNumber)(nil), "types.BallNumber")
 	proto.RegisterType((*MissingRecord)(nil), "types.MissingRecord")
 	proto.RegisterType((*PowerballAction)(nil), "types.PowerballAction")
 	proto.RegisterType((*PowerballCreate)(nil), "types.PowerballCreate")
 	proto.RegisterType((*PowerballBuy)(nil), "types.PowerballBuy")
+	proto.RegisterType((*PowerballPause)(nil), "types.PowerballPause")
 	proto.RegisterType((*PowerballDraw)(nil), "types.PowerballDraw")
 	proto.RegisterType((*PowerballClose)(nil), "types.PowerballClose")
 	proto.RegisterType((*ReceiptPowerball)(nil), "types.ReceiptPowerball")
@@ -1306,84 +1405,87 @@ func init() {
 func init() { proto.RegisterFile("powerball.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
-	// 1257 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x58, 0xcd, 0x6e, 0xdb, 0x46,
-	0x10, 0x36, 0x49, 0x51, 0xb2, 0xc6, 0xb2, 0xe2, 0xae, 0x7f, 0x40, 0x0b, 0x6d, 0x60, 0x10, 0x68,
-	0x1b, 0x04, 0x8d, 0xe1, 0x3a, 0x41, 0x5b, 0x14, 0x69, 0x80, 0x38, 0x2e, 0xaa, 0x14, 0xfe, 0x03,
-	0xed, 0x36, 0x67, 0x5a, 0xda, 0xc4, 0x84, 0x25, 0x52, 0x25, 0x97, 0xb1, 0x79, 0xed, 0xa1, 0xef,
-	0xd0, 0x5b, 0x0f, 0x3d, 0xf7, 0xd8, 0x07, 0xe8, 0x93, 0xf4, 0x3d, 0x7a, 0x29, 0x76, 0x76, 0x49,
-	0x2e, 0xa9, 0x95, 0xa5, 0xb4, 0x39, 0x69, 0x77, 0x76, 0x76, 0x77, 0xf6, 0x9b, 0x99, 0x6f, 0x86,
-	0x82, 0x7b, 0x93, 0xe8, 0x86, 0xc6, 0x97, 0xfe, 0x68, 0xb4, 0x3b, 0x89, 0x23, 0x16, 0x11, 0x9b,
-	0x65, 0x13, 0x9a, 0xb8, 0x57, 0xd0, 0x3d, 0x4b, 0xe3, 0xc1, 0x95, 0x9f, 0x50, 0x8f, 0x0e, 0xa2,
-	0x78, 0x48, 0xb6, 0xa0, 0xe9, 0x8f, 0xa3, 0x34, 0x64, 0x8e, 0xb1, 0x63, 0x3c, 0xb0, 0x3c, 0x39,
-	0xe3, 0xf2, 0x30, 0x1d, 0x5f, 0xd2, 0xd8, 0x31, 0x85, 0x5c, 0xcc, 0xc8, 0x06, 0xd8, 0x41, 0x38,
-	0xa4, 0xb7, 0x8e, 0x85, 0x62, 0x31, 0x21, 0x6b, 0x60, 0xdd, 0xf8, 0x99, 0xd3, 0x40, 0x19, 0x1f,
-	0xba, 0x3f, 0x1b, 0x70, 0xaf, 0x7a, 0x55, 0x42, 0x1e, 0x41, 0x33, 0xc6, 0xa1, 0x63, 0xec, 0x58,
-	0x0f, 0x56, 0xf6, 0x37, 0x77, 0xd1, 0xaa, 0xdd, 0xaa, 0x9e, 0x27, 0x95, 0x88, 0x03, 0xad, 0xd7,
-	0x69, 0x38, 0x7c, 0x15, 0x84, 0xd2, 0x86, 0x7c, 0x4a, 0x3e, 0x81, 0xae, 0x30, 0xf3, 0x34, 0xa4,
-	0x5e, 0x94, 0x86, 0x43, 0x69, 0x4d, 0x4d, 0xea, 0xfe, 0xd6, 0x84, 0xf6, 0x59, 0x8e, 0x04, 0xd9,
-	0x81, 0x95, 0x02, 0x96, 0x97, 0x43, 0x7c, 0x6f, 0xdb, 0x53, 0x45, 0xfc, 0xd1, 0x09, 0xf3, 0x59,
-	0x9a, 0xe0, 0x85, 0xb6, 0x27, 0x67, 0xc4, 0x85, 0xce, 0x20, 0xa6, 0x3e, 0xa3, 0x7d, 0x1a, 0xbc,
-	0xb9, 0x62, 0xf2, 0xb6, 0x8a, 0x8c, 0x10, 0x68, 0x70, 0xf3, 0x24, 0x06, 0x38, 0xc6, 0x1b, 0xd3,
-	0xf8, 0x60, 0x14, 0x0d, 0xae, 0x4f, 0xd2, 0xb1, 0x63, 0xe3, 0x92, 0x2a, 0xe2, 0x27, 0x0f, 0x63,
-	0xff, 0xa6, 0x50, 0x69, 0x8a, 0x93, 0x55, 0x19, 0xd9, 0x83, 0xf5, 0x91, 0x9f, 0xb0, 0x8b, 0xd8,
-	0x0f, 0x93, 0x8b, 0xe8, 0x2c, 0x8d, 0xcf, 0x99, 0xcf, 0xa8, 0xd3, 0x42, 0x55, 0xdd, 0x12, 0xd9,
-	0x87, 0x0d, 0x45, 0x7c, 0x18, 0xfb, 0x37, 0x62, 0xcb, 0x32, 0x6e, 0xd1, 0xae, 0x91, 0x2f, 0xa1,
-	0x25, 0x70, 0x4f, 0x9c, 0x36, 0x7a, 0xe7, 0xa3, 0xdc, 0x3b, 0x45, 0x28, 0x49, 0x3f, 0x7e, 0x1b,
-	0xb2, 0x38, 0xf3, 0x72, 0x6d, 0x6e, 0x1e, 0x8b, 0x98, 0x3f, 0xca, 0xbd, 0x38, 0xbc, 0xb8, 0xe5,
-	0x2f, 0x01, 0x61, 0x9e, 0x66, 0x89, 0xdc, 0x07, 0x10, 0xd0, 0x3d, 0x1f, 0x0e, 0x63, 0x67, 0x05,
-	0xfd, 0xa0, 0x48, 0x78, 0x8c, 0xc5, 0xe8, 0xd5, 0x8e, 0x88, 0x31, 0x9c, 0x70, 0x30, 0x47, 0xe9,
-	0xe0, 0x3a, 0x3b, 0x11, 0x61, 0xb9, 0x2a, 0xc0, 0x54, 0x44, 0xa5, 0x9b, 0x4e, 0xc3, 0x63, 0x3f,
-	0x08, 0x9d, 0xae, 0xea, 0x26, 0x21, 0x23, 0x4f, 0x61, 0x5b, 0x83, 0x98, 0xdc, 0x70, 0x0f, 0x37,
-	0xcc, 0x56, 0x20, 0xcf, 0xa0, 0xa7, 0x03, 0x4f, 0x6e, 0x5f, 0xc3, 0xed, 0x77, 0x68, 0x90, 0xa7,
-	0xd0, 0x1d, 0x07, 0x49, 0x12, 0x84, 0x6f, 0x24, 0x96, 0xce, 0x07, 0x88, 0xf5, 0x86, 0xc4, 0xfa,
-	0x58, 0x5d, 0xf4, 0x6a, 0xba, 0x3d, 0x0f, 0x3a, 0xaa, 0x0b, 0x78, 0xd6, 0x5d, 0xd3, 0x4c, 0x06,
-	0x32, 0x1f, 0x92, 0xcf, 0xc0, 0x7e, 0xeb, 0x8f, 0x52, 0x8a, 0xf1, 0xbb, 0xb2, 0xbf, 0xa5, 0x4d,
-	0xb0, 0xc4, 0x13, 0x4a, 0x5f, 0x9b, 0x5f, 0x19, 0xee, 0xc7, 0xb0, 0x5a, 0xb9, 0x94, 0x83, 0xcf,
-	0x82, 0x31, 0x4d, 0x30, 0x47, 0x6d, 0x4f, 0x4c, 0xdc, 0xbf, 0x79, 0x3a, 0xe7, 0x81, 0xf0, 0x7c,
-	0xc0, 0x82, 0x28, 0x24, 0x7b, 0xd0, 0x14, 0xd0, 0xa2, 0x05, 0xca, 0x6d, 0xb9, 0xde, 0x0b, 0x91,
-	0x1f, 0x4b, 0x9e, 0xd4, 0x23, 0x9f, 0x82, 0x75, 0x99, 0x66, 0xd2, 0xb8, 0xf5, 0xba, 0xfa, 0x41,
-	0x9a, 0xf5, 0x97, 0x3c, 0xae, 0x41, 0x1e, 0x42, 0x83, 0xa7, 0x00, 0x26, 0x5a, 0x89, 0x4e, 0xa1,
-	0xc9, 0x61, 0xed, 0x2f, 0x79, 0xa8, 0x43, 0x1e, 0x81, 0x3d, 0x18, 0x45, 0x09, 0xc5, 0xcc, 0x53,
-	0x48, 0xa5, 0xb0, 0x82, 0x2f, 0xf6, 0x97, 0x3c, 0xa1, 0x45, 0xba, 0x60, 0xb2, 0x0c, 0xa3, 0xd3,
-	0xf6, 0x4c, 0x96, 0x1d, 0xb4, 0x24, 0x64, 0xee, 0x2b, 0xe5, 0x85, 0xc2, 0xf2, 0x7a, 0xfe, 0x1a,
-	0xf3, 0xf3, 0xd7, 0x9c, 0xce, 0x5f, 0x37, 0x86, 0x8e, 0xfa, 0xc6, 0xc5, 0x78, 0x48, 0x92, 0xb2,
-	0x39, 0x83, 0x94, 0xad, 0x0a, 0x29, 0x4f, 0xd3, 0xef, 0xe7, 0xb0, 0x5a, 0x41, 0x6b, 0xfe, 0xa5,
-	0xee, 0x3e, 0x74, 0xab, 0x98, 0x2d, 0xb0, 0xe7, 0x1f, 0x13, 0xd6, 0x3c, 0x3a, 0xa0, 0xc1, 0x84,
-	0xbd, 0x0f, 0x9e, 0xbd, 0x0f, 0x30, 0x89, 0xe9, 0xdb, 0x73, 0xb1, 0x66, 0xe1, 0x9a, 0x22, 0xe1,
-	0x1c, 0xeb, 0x73, 0xca, 0x68, 0xe0, 0x91, 0x38, 0x2e, 0xc9, 0xc2, 0x56, 0xc9, 0xa2, 0x44, 0xaa,
-	0x59, 0x41, 0xaa, 0x44, 0xb6, 0x55, 0x41, 0xb6, 0x46, 0x2e, 0xcb, 0xd3, 0xe4, 0x42, 0xa0, 0xc1,
-	0x53, 0xc1, 0x69, 0x0b, 0x7e, 0xe7, 0x63, 0x7e, 0x1a, 0xbb, 0xed, 0xfb, 0xc9, 0x15, 0xc6, 0x53,
-	0xdb, 0x93, 0x33, 0xf2, 0x0d, 0x40, 0x3a, 0x19, 0xfa, 0x8c, 0xbe, 0x0c, 0x5f, 0x47, 0x48, 0x70,
-	0x1a, 0x3a, 0xfd, 0x01, 0x35, 0x0e, 0xd2, 0x8c, 0x2b, 0x79, 0xca, 0x86, 0xdc, 0x9d, 0x9d, 0xc2,
-	0x9d, 0x65, 0xd5, 0x5d, 0x55, 0xaa, 0xae, 0xfb, 0x84, 0x83, 0xff, 0x53, 0x71, 0x20, 0xee, 0x9d,
-	0xef, 0x33, 0x1f, 0xd6, 0xd5, 0x5d, 0xd2, 0x80, 0x05, 0xbc, 0x96, 0xa3, 0x6f, 0xea, 0xd0, 0xb7,
-	0x14, 0xf4, 0xdd, 0x3f, 0x0c, 0xd8, 0xaa, 0xdd, 0xd1, 0x0f, 0x12, 0x16, 0xc5, 0xd9, 0xfb, 0xbc,
-	0x86, 0x4b, 0x07, 0xe8, 0xcb, 0x06, 0x46, 0x8a, 0x98, 0x90, 0x0f, 0xa1, 0x3d, 0x0c, 0x62, 0x8a,
-	0x1c, 0x85, 0x41, 0x61, 0x7b, 0xa5, 0xa0, 0x44, 0xb2, 0xa9, 0x22, 0x79, 0x0a, 0x9b, 0xaa, 0xbd,
-	0x47, 0xdc, 0xef, 0x0b, 0xa2, 0x52, 0x98, 0x66, 0xee, 0x58, 0x25, 0x02, 0xbf, 0x18, 0xe0, 0x4c,
-	0x9d, 0xb8, 0x38, 0x06, 0xca, 0xa1, 0xba, 0xf7, 0x5a, 0x33, 0xdf, 0xdb, 0xa8, 0xbd, 0xd7, 0xfd,
-	0x1d, 0x0d, 0x99, 0x8c, 0xb2, 0xc2, 0x94, 0x93, 0x28, 0x1e, 0xfb, 0x22, 0x58, 0xea, 0x7d, 0x8d,
-	0xa1, 0xe9, 0x6b, 0x6a, 0x1c, 0x68, 0xce, 0xe7, 0x40, 0x4b, 0xd3, 0xc3, 0x54, 0x4b, 0x7e, 0xa3,
-	0x5e, 0xf2, 0xdd, 0x5f, 0x1b, 0xb0, 0x5d, 0x35, 0xf3, 0x45, 0x1a, 0xc7, 0x34, 0x64, 0x68, 0x67,
-	0xc9, 0x17, 0x46, 0x85, 0x2f, 0xf2, 0x9e, 0xcb, 0x54, 0x7a, 0xae, 0x19, 0xdd, 0x92, 0xf5, 0xee,
-	0xdd, 0x52, 0xe3, 0x8e, 0x6e, 0x69, 0x46, 0xd3, 0x63, 0xcf, 0x6e, 0x7a, 0x0a, 0x97, 0x36, 0xef,
-	0x68, 0x6a, 0x5a, 0xd3, 0xbc, 0x73, 0x67, 0xc3, 0xb2, 0xfc, 0xff, 0x1a, 0x96, 0xf6, 0xdc, 0x86,
-	0xa5, 0xe6, 0x7d, 0x98, 0xef, 0xfd, 0x15, 0x8d, 0xf7, 0xa7, 0xdb, 0x9e, 0xce, 0xe2, 0x6d, 0x8f,
-	0x7b, 0x08, 0x3b, 0xd5, 0xd0, 0x90, 0x79, 0x74, 0xa4, 0xa0, 0x54, 0xc3, 0xd1, 0xc0, 0x5c, 0x54,
-	0x45, 0xee, 0x31, 0xa7, 0x24, 0xf5, 0x94, 0xf3, 0xab, 0xe8, 0x06, 0xa3, 0xeb, 0x71, 0xd9, 0xf9,
-	0x8a, 0xef, 0x92, 0x6d, 0x4d, 0x67, 0x22, 0x6d, 0xcb, 0x35, 0xdd, 0xef, 0x60, 0xb3, 0xcc, 0x28,
-	0xbc, 0xa1, 0xfc, 0xa0, 0x0a, 0x73, 0x23, 0xf4, 0x95, 0xa7, 0x52, 0xd3, 0xdd, 0xbf, 0x0c, 0x20,
-	0xd3, 0x17, 0xbd, 0xeb, 0x31, 0x33, 0x18, 0x92, 0x17, 0xad, 0x6c, 0x92, 0x87, 0x32, 0x8e, 0xf3,
-	0xea, 0x62, 0x6b, 0xaa, 0x8b, 0xca, 0x89, 0x45, 0xc1, 0x6b, 0x69, 0x0b, 0xde, 0xb2, 0x5a, 0xf0,
-	0xdc, 0xef, 0x61, 0x7d, 0xfa, 0x0d, 0xc9, 0x7f, 0x43, 0x36, 0x52, 0xce, 0xe2, 0xe1, 0x38, 0x07,
-	0x10, 0x3d, 0x55, 0xe6, 0xc6, 0x5b, 0x5a, 0xe3, 0x1b, 0x15, 0xe3, 0x8f, 0x60, 0x43, 0x73, 0x61,
-	0x42, 0x9e, 0xd4, 0xad, 0xef, 0xe9, 0xfa, 0xd0, 0xba, 0xf9, 0xcf, 0x14, 0x77, 0x8a, 0x12, 0xef,
-	0xd1, 0x41, 0x09, 0xb1, 0x51, 0x87, 0x98, 0xbb, 0xc7, 0x2c, 0xdd, 0x53, 0x81, 0xb2, 0xd8, 0xbf,
-	0x08, 0x94, 0x85, 0x72, 0x69, 0xcb, 0x9f, 0x06, 0x6c, 0xe9, 0xfb, 0x0d, 0x72, 0x08, 0xad, 0x4b,
-	0x31, 0x94, 0xe7, 0x3d, 0xbc, 0xb3, 0x3f, 0xd9, 0x95, 0xbf, 0xf2, 0xdb, 0x4f, 0x6e, 0xed, 0xfd,
-	0x08, 0x1d, 0x75, 0x41, 0xf3, 0x45, 0xb2, 0x57, 0xfd, 0x22, 0xe9, 0xcd, 0xb4, 0xba, 0xf2, 0x55,
-	0xf2, 0x05, 0xf4, 0xaa, 0xc9, 0x9a, 0x93, 0x29, 0x7e, 0x1f, 0x3a, 0xd0, 0xe2, 0x5d, 0x01, 0x4d,
-	0x04, 0x16, 0x6d, 0x2f, 0x9f, 0x5e, 0x36, 0xf1, 0xdf, 0x8e, 0xc7, 0xff, 0x06, 0x00, 0x00, 0xff,
-	0xff, 0xf4, 0xd4, 0x4c, 0x2b, 0x00, 0x11, 0x00, 0x00,
+	// 1306 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x58, 0x4d, 0x6f, 0xdb, 0x46,
+	0x13, 0x36, 0x49, 0x51, 0xb2, 0x46, 0xb2, 0x92, 0xac, 0x6c, 0x83, 0x36, 0xde, 0x37, 0x10, 0x88,
+	0x7e, 0xb8, 0x05, 0xea, 0xa4, 0x72, 0xd0, 0x53, 0x1a, 0x20, 0x76, 0x11, 0x28, 0x85, 0xbf, 0x40,
+	0xbb, 0x08, 0xd0, 0x43, 0x01, 0x9a, 0xda, 0xc4, 0x44, 0x24, 0x92, 0x25, 0x97, 0xb1, 0xd5, 0x63,
+	0x0f, 0xbd, 0xfa, 0x9f, 0xf4, 0xd8, 0x4b, 0x6f, 0xed, 0x1f, 0x2b, 0x76, 0x96, 0x1f, 0x4b, 0x8a,
+	0x94, 0x94, 0xd6, 0x37, 0xed, 0xee, 0xec, 0xee, 0xcc, 0x33, 0x33, 0xcf, 0x3e, 0x14, 0x3c, 0x08,
+	0xfc, 0x1b, 0x1a, 0x5e, 0xd9, 0x93, 0xc9, 0x7e, 0x10, 0xfa, 0xcc, 0x27, 0x3a, 0x9b, 0x05, 0x34,
+	0x32, 0x5d, 0xe8, 0x9d, 0xc7, 0xa1, 0x73, 0x6d, 0x47, 0xd4, 0xa2, 0x8e, 0x1f, 0x8e, 0xc9, 0x36,
+	0x34, 0xed, 0xa9, 0x1f, 0x7b, 0xcc, 0x50, 0x06, 0xca, 0x9e, 0x66, 0x25, 0x23, 0xf2, 0x05, 0x34,
+	0xbd, 0x78, 0x7a, 0x45, 0x43, 0x43, 0x1d, 0x28, 0x7b, 0x9d, 0xe1, 0xa3, 0x7d, 0x3c, 0x61, 0xff,
+	0xd0, 0x9e, 0x4c, 0x4e, 0x71, 0xc1, 0x4a, 0x0c, 0xc8, 0x26, 0xe8, 0xae, 0x37, 0xa6, 0xb7, 0x86,
+	0x86, 0x27, 0x88, 0x81, 0xf9, 0xa7, 0x02, 0xdd, 0xf4, 0xae, 0xd7, 0xde, 0x5b, 0x9f, 0x10, 0x68,
+	0xd8, 0xe3, 0x71, 0x88, 0xf7, 0xb4, 0x2d, 0xfc, 0x4d, 0x9e, 0x40, 0x2b, 0x44, 0x3f, 0x22, 0x43,
+	0x1d, 0x68, 0x7b, 0x9d, 0xe1, 0x56, 0x72, 0x4d, 0xd1, 0x4b, 0x2b, 0xb5, 0x22, 0x06, 0xb4, 0xde,
+	0xc6, 0xde, 0xf8, 0x8d, 0xeb, 0x25, 0xb7, 0xa5, 0x43, 0xf2, 0x19, 0xf4, 0x84, 0xeb, 0x67, 0x1e,
+	0xb5, 0xfc, 0xd8, 0x1b, 0x1b, 0x0d, 0x34, 0x28, 0xcd, 0x92, 0x4f, 0x60, 0x23, 0x08, 0xdd, 0x5f,
+	0x68, 0x66, 0xa6, 0x0f, 0xb4, 0x3d, 0xcd, 0x2a, 0x4e, 0x9a, 0x77, 0x4d, 0x68, 0x9f, 0xa7, 0x18,
+	0x92, 0x01, 0x74, 0x32, 0x40, 0x5f, 0x8f, 0x93, 0x08, 0xe4, 0x29, 0x0e, 0x63, 0xc4, 0x6c, 0x16,
+	0x47, 0x08, 0x97, 0x6e, 0x25, 0x23, 0x62, 0x42, 0xd7, 0x09, 0xa9, 0xcd, 0xe8, 0x88, 0xba, 0xef,
+	0xae, 0x59, 0xe2, 0x74, 0x61, 0x8e, 0xfc, 0x0f, 0xda, 0xcc, 0x67, 0xf6, 0xe4, 0x55, 0xee, 0x74,
+	0x3e, 0x41, 0x76, 0x61, 0x3d, 0xb2, 0x27, 0xf4, 0x95, 0x70, 0x95, 0x2f, 0x66, 0x63, 0x8e, 0x46,
+	0x10, 0x87, 0x97, 0xee, 0x94, 0x1a, 0x4d, 0xf4, 0x29, 0x1d, 0xf2, 0x5d, 0xe3, 0xd0, 0xbe, 0xc1,
+	0xa5, 0x16, 0x2e, 0x65, 0x63, 0xf2, 0x14, 0xfa, 0x13, 0x3b, 0x62, 0x97, 0xa1, 0xed, 0x45, 0x97,
+	0xfe, 0x79, 0x1c, 0x5e, 0x30, 0x9b, 0x51, 0x63, 0x1d, 0x0f, 0xaf, 0x5a, 0x22, 0x43, 0xd8, 0x94,
+	0xa6, 0xbf, 0x0b, 0xed, 0x1b, 0xb1, 0xa5, 0x8d, 0x5b, 0x2a, 0xd7, 0xc8, 0x13, 0x58, 0x0f, 0xe2,
+	0x90, 0x67, 0x3e, 0x32, 0x00, 0x73, 0xdb, 0x2f, 0xe5, 0x96, 0xaf, 0x59, 0x99, 0x11, 0x77, 0x0b,
+	0xa3, 0x4e, 0x97, 0xc7, 0x97, 0xb7, 0xa7, 0xf1, 0xd4, 0xe8, 0x08, 0xb7, 0x2a, 0x96, 0xc8, 0x63,
+	0x00, 0x01, 0xe4, 0x4b, 0x5e, 0x57, 0x5d, 0x0c, 0x53, 0x9a, 0xe1, 0x85, 0x19, 0x62, 0x8a, 0x37,
+	0x44, 0x61, 0xe2, 0x80, 0x1c, 0x40, 0x67, 0x12, 0x3b, 0xef, 0x67, 0xa2, 0x8a, 0x8d, 0x5e, 0x5d,
+	0x79, 0xcb, 0x56, 0x79, 0x1e, 0xcf, 0xbc, 0x13, 0xdb, 0xf5, 0x8c, 0x07, 0x72, 0x1e, 0xc5, 0x1c,
+	0x79, 0x0e, 0x3b, 0x15, 0xe0, 0x25, 0x1b, 0x1e, 0xe2, 0x86, 0x7a, 0x03, 0xf2, 0x02, 0x76, 0xab,
+	0x70, 0x4c, 0xb6, 0x3f, 0xc2, 0xed, 0x0b, 0x2c, 0xc8, 0x73, 0xe8, 0x4d, 0xdd, 0x28, 0x72, 0xbd,
+	0x77, 0x56, 0xd2, 0x51, 0x04, 0x51, 0xdf, 0x4c, 0x22, 0x3b, 0x91, 0x17, 0xad, 0x92, 0x2d, 0xaf,
+	0x70, 0xe6, 0x3a, 0xef, 0x29, 0x3b, 0x0f, 0x5d, 0x87, 0x1a, 0x7d, 0xbc, 0x4e, 0x9e, 0x32, 0x4d,
+	0x80, 0x1c, 0x1c, 0x0e, 0x2d, 0xaf, 0xfc, 0xc8, 0x50, 0x06, 0xda, 0x5e, 0xdb, 0x12, 0x03, 0xf3,
+	0x53, 0xd8, 0x28, 0x5c, 0xc3, 0xcd, 0x98, 0x3b, 0xa5, 0xc2, 0x4c, 0xb7, 0xc4, 0xc0, 0xbc, 0x53,
+	0xe1, 0x41, 0xd6, 0x5c, 0x2f, 0x1d, 0xe6, 0xfa, 0x1e, 0x79, 0x0a, 0x4d, 0x01, 0x26, 0x76, 0x57,
+	0x67, 0xb8, 0x9d, 0x16, 0x4b, 0x6a, 0x77, 0x24, 0x5a, 0x66, 0xcd, 0x4a, 0xec, 0xc8, 0xe7, 0xa0,
+	0x5d, 0xc5, 0xb3, 0x84, 0x9e, 0xfa, 0x65, 0xf3, 0xc3, 0x78, 0x36, 0x5a, 0xb3, 0xb8, 0x05, 0xf9,
+	0x0a, 0xf4, 0xc0, 0x8e, 0x23, 0x8a, 0xcd, 0x27, 0x51, 0x4c, 0x6a, 0x7a, 0xce, 0x17, 0x47, 0x6b,
+	0x96, 0xb0, 0x22, 0x5f, 0x42, 0x83, 0xb7, 0x0a, 0x76, 0x62, 0x0e, 0x5f, 0x66, 0xcd, 0x71, 0x1f,
+	0xad, 0x59, 0x68, 0xc3, 0x8f, 0x76, 0x26, 0x7e, 0x44, 0xb1, 0x33, 0x2b, 0x8e, 0x3e, 0xe2, 0x8b,
+	0xfc, 0x68, 0xb4, 0x22, 0x3d, 0x50, 0xd9, 0xcc, 0x00, 0x64, 0x08, 0x95, 0xcd, 0x0e, 0x5b, 0xa0,
+	0x7f, 0xb0, 0x27, 0x31, 0x35, 0x5d, 0x09, 0x10, 0x11, 0xa8, 0xdc, 0xdb, 0x4a, 0x7d, 0x6f, 0xab,
+	0xa5, 0xde, 0x2e, 0xe5, 0x51, 0x9b, 0xcf, 0x63, 0x04, 0x5d, 0x19, 0xa4, 0xd5, 0xb8, 0x2d, 0x79,
+	0x22, 0xd4, 0x9a, 0x27, 0x42, 0x5b, 0xf2, 0x44, 0x98, 0x43, 0xe8, 0x15, 0xe1, 0x5e, 0x7e, 0xad,
+	0xf9, 0x35, 0x6c, 0x14, 0x40, 0x5f, 0x61, 0x8b, 0x7c, 0x0d, 0x42, 0xbf, 0xc2, 0x9e, 0x3b, 0x0d,
+	0x1e, 0x5a, 0xd4, 0xa1, 0x6e, 0xc0, 0xee, 0x83, 0xf0, 0x1f, 0x03, 0x04, 0x21, 0xfd, 0x70, 0x21,
+	0xd6, 0x34, 0x5c, 0x93, 0x66, 0xb2, 0x57, 0xb0, 0x21, 0xbd, 0x82, 0x19, 0x4f, 0xe9, 0x32, 0x4f,
+	0xe5, 0xf0, 0x36, 0x97, 0xbd, 0xc0, 0x79, 0x86, 0x5a, 0x85, 0x0c, 0x95, 0xa8, 0x6e, 0x7d, 0x25,
+	0xaa, 0x23, 0xd0, 0xe0, 0x6d, 0x9a, 0x90, 0x3b, 0xfe, 0xe6, 0x17, 0xb0, 0xdb, 0x91, 0x1d, 0x5d,
+	0x63, 0xf1, 0xb6, 0xad, 0x64, 0x44, 0xbe, 0x05, 0x88, 0x83, 0xb1, 0xcd, 0x90, 0xcb, 0x91, 0xaa,
+	0x3b, 0xc3, 0xff, 0x97, 0x9b, 0xe0, 0x07, 0xb4, 0x38, 0x8c, 0x67, 0x48, 0xf8, 0xd2, 0x86, 0x5c,
+	0x39, 0x74, 0x65, 0xe5, 0xf0, 0x8c, 0x27, 0xe4, 0xe7, 0x6c, 0x3b, 0x5a, 0x2e, 0xcf, 0xa3, 0x0d,
+	0x7d, 0x79, 0x57, 0x72, 0xdd, 0x0a, 0x99, 0x4c, 0x33, 0xa2, 0x56, 0x65, 0x44, 0x93, 0x32, 0x62,
+	0xfe, 0xae, 0xc0, 0x76, 0xe9, 0x8e, 0x91, 0x1b, 0x31, 0x3f, 0x9c, 0xdd, 0xe7, 0x35, 0x7c, 0xd6,
+	0xc1, 0x64, 0x36, 0xb0, 0x7a, 0xc4, 0x80, 0xab, 0x84, 0xb1, 0x1b, 0x52, 0x64, 0x4b, 0x2c, 0x14,
+	0xdd, 0xca, 0x27, 0x72, 0x24, 0x9b, 0x32, 0x92, 0x67, 0xb0, 0x25, 0xfb, 0x7b, 0xcc, 0xb3, 0xbc,
+	0x22, 0x2a, 0x99, 0x6b, 0x2a, 0xca, 0xa3, 0x04, 0x81, 0xdf, 0x14, 0x30, 0xe6, 0x4e, 0x5c, 0x1d,
+	0x03, 0xe9, 0xd0, 0xaa, 0x78, 0xb5, 0xda, 0x78, 0x1b, 0xa5, 0x78, 0xcd, 0x3f, 0xd0, 0x91, 0x60,
+	0x32, 0xcb, 0x5c, 0x39, 0xf5, 0xc3, 0xa9, 0x2d, 0x8a, 0xa5, 0x2c, 0xba, 0x94, 0x0a, 0xd1, 0x25,
+	0xd1, 0xab, 0x5a, 0x4f, 0xaf, 0xda, 0x62, 0x7a, 0x6d, 0xcc, 0xd1, 0x6b, 0x49, 0x93, 0xe8, 0x65,
+	0x4d, 0x62, 0xfe, 0xd5, 0x80, 0x9d, 0xa2, 0xe3, 0x47, 0x71, 0x18, 0x52, 0x8f, 0xa1, 0xe7, 0x39,
+	0xab, 0x28, 0x05, 0x56, 0x29, 0x48, 0x44, 0x75, 0x91, 0x44, 0xd4, 0x4a, 0x12, 0xb1, 0x46, 0xec,
+	0x35, 0x3e, 0x5e, 0xec, 0xe9, 0x0b, 0xc4, 0x5e, 0x8d, 0x76, 0x6b, 0xd6, 0x6b, 0xb7, 0xac, 0x14,
+	0x5a, 0x0b, 0xb4, 0xd9, 0x6a, 0x84, 0xb5, 0x50, 0x77, 0xb5, 0xff, 0x9b, 0xee, 0x82, 0xa5, 0xba,
+	0x4b, 0x2a, 0xa4, 0x4e, 0x7d, 0x21, 0x75, 0x4b, 0x85, 0x34, 0xaf, 0xd6, 0x36, 0x56, 0x57, 0x6b,
+	0xe6, 0x1b, 0x18, 0x14, 0x6b, 0x28, 0x69, 0xc1, 0x63, 0x09, 0x95, 0x12, 0x94, 0x0a, 0x1e, 0xbf,
+	0x04, 0x4a, 0xf3, 0x84, 0x13, 0x9c, 0x7c, 0xf0, 0xc5, 0xb5, 0x7f, 0x83, 0x95, 0x79, 0x90, 0x7f,
+	0xa9, 0x89, 0xa3, 0x76, 0x2a, 0x14, 0x57, 0xe9, 0x6b, 0xcd, 0xfc, 0x11, 0xb6, 0xf2, 0xfe, 0x14,
+	0xd7, 0x09, 0x5d, 0x98, 0xbf, 0x6d, 0xca, 0xea, 0x6f, 0x5b, 0x41, 0x7d, 0x98, 0x7f, 0x2b, 0x40,
+	0xe6, 0xef, 0xbe, 0x87, 0x93, 0x6b, 0x58, 0x99, 0x3f, 0x8b, 0xb3, 0x80, 0x26, 0x54, 0x84, 0xbf,
+	0x73, 0xd6, 0xd5, 0x25, 0xd6, 0xcd, 0x1e, 0xd0, 0x66, 0xe5, 0x03, 0xda, 0x92, 0x1f, 0x50, 0xf3,
+	0x7b, 0xe8, 0xcf, 0x07, 0x11, 0xfd, 0x3b, 0xb4, 0x7f, 0x55, 0xa4, 0xc3, 0x78, 0x99, 0x7e, 0x3c,
+	0x24, 0xd5, 0x04, 0x9d, 0x06, 0xa4, 0x55, 0x06, 0xd4, 0x28, 0x04, 0x74, 0x0c, 0x9b, 0x15, 0x3e,
+	0x44, 0xe4, 0x59, 0x39, 0xa2, 0xdd, 0x2a, 0x61, 0x5d, 0x0e, 0xe9, 0x85, 0x94, 0x63, 0x21, 0x23,
+	0x2c, 0xea, 0xe4, 0xb0, 0x2b, 0x65, 0xd8, 0x79, 0x82, 0xd4, 0x3c, 0x41, 0xe6, 0x4f, 0x12, 0x22,
+	0xd9, 0xfe, 0xa8, 0xf2, 0xaf, 0x88, 0x83, 0xf2, 0x5f, 0x11, 0x3b, 0xd5, 0x3a, 0xc6, 0xa2, 0x4e,
+	0xee, 0xdf, 0x29, 0x6c, 0x57, 0xcb, 0x1c, 0x1e, 0xaf, 0x10, 0x3a, 0xb5, 0xf1, 0xe6, 0xfe, 0x58,
+	0xa9, 0xa9, 0xf9, 0x0d, 0xec, 0x16, 0xfb, 0x2f, 0x65, 0x4d, 0xfc, 0x9e, 0x35, 0xa0, 0xc5, 0x5d,
+	0xa5, 0x51, 0xfa, 0xd9, 0x95, 0x0e, 0xaf, 0x9a, 0xf8, 0x2f, 0xcf, 0xc1, 0x3f, 0x01, 0x00, 0x00,
+	0xff, 0xff, 0x67, 0x7d, 0x62, 0x7e, 0xf8, 0x11, 0x00, 0x00,
 }

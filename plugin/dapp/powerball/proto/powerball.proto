@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package types;
 
-message PurchaseRecord {
+message PowerPurchaseRecord {
     int64 amount = 1;
     BallNumber number = 2;
     int64 index  = 3;
@@ -10,7 +10,7 @@ message PurchaseRecord {
 
 message PurchaseInfo {
     string                  addr           = 1;
-	repeated PurchaseRecord records        = 2;
+	repeated PowerPurchaseRecord records   = 2;
 	int64                   fundWin        = 3;
     int64                   amountOneRound = 4;
 	repeated int64          prizeOneRound  = 5;
@@ -20,7 +20,7 @@ message Powerball {
     string                       powerballId                = 1;
     int32                        status                     = 2;
     int64                        createHeight               = 3;
-    int64                        totalFund                  = 4;
+    int64                        accuFund                   = 4;
     int64                        saleFund                   = 5;
     string                       purTime                    = 6;
     string                       drawTime                   = 7;
@@ -34,16 +34,18 @@ message Powerball {
     int64                        createOnMain               = 15;
     int64                        lastTransToPurStateOnMain  = 16;
     int64                        lastTransToDrawStateOnMain = 17;
-    repeated MissingRecord       missingRecords             = 18;
+    repeated PowerMissingRecord  missingRecords             = 18;
     int64                        ticketPrice                = 19;
+    int64                        platformRatio              = 20;
+    int64                        developRatio               = 21;
 }
 
 message BallNumber {
 	repeated string balls = 1;
 }
 
-message MissingRecord {
-    repeated int32 times = 1;
+message PowerMissingRecord {
+    repeated int64 times = 1;
 }
 
 message PowerballAction {
@@ -58,9 +60,11 @@ message PowerballAction {
 }
 
 message PowerballCreate {
-    string purTime     = 1;
-    string drawTime    = 2;
-    int64  ticketPrice = 3;
+    string purTime       = 1;
+    string drawTime      = 2;
+    int64  ticketPrice   = 3;
+    int64  platformRatio = 4;
+    int64  developRatio  = 5;
 }
 
 message PowerballBuy {
@@ -128,16 +132,18 @@ message ReqPowerballLuckyHistory {
 }
 
 message ReplyPowerballNormalInfo {
-    int64  createHeight = 1;
-    string purTime      = 2;
-    string drawTime     = 3;
-    int64  ticketPrice  = 4;
-    string createAddr   = 5;
+    int64  createHeight  = 1;
+    string purTime       = 2;
+    string drawTime      = 3;
+    int64  ticketPrice   = 4;
+    int64  platformRatio = 5;
+    int64  developRatio  = 6;
+    string createAddr    = 7;
 }
 
 message ReplyPowerballCurrentInfo {
     int32    status                       = 1;
-    int64    totalFund                    = 2;
+    int64    accuFund                     = 2;
     int64    saleFund                     = 3;
     int64    lastTransToPurState          = 4;
     int64    lastTransToDrawState         = 5;
@@ -148,7 +154,7 @@ message ReplyPowerballCurrentInfo {
     int64    lastTransToDrawStateOnMain   = 10;
     string   purTime                      = 11;
     string   drawTime                     = 12;
-    repeated MissingRecord missingRecords = 13;
+    repeated PowerMissingRecord missingRecords = 13;
 }
 
 message ReplyPowerballHistoryLuckyNumber {

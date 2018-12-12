@@ -19,6 +19,8 @@ func (l *Powerball) Query_GetPowerballNormalInfo(param *pty.ReqPowerballInfo) (t
 		powerball.PurTime,
 		powerball.DrawTime,
 		powerball.TicketPrice,
+		powerball.PlatformRatio,
+		powerball.DevelopRatio,
 		powerball.CreateAddr}, nil
 }
 
@@ -42,7 +44,7 @@ func (l *Powerball) Query_GetPowerballCurrentInfo(param *pty.ReqPowerballInfo) (
 	}
 	reply := &pty.ReplyPowerballCurrentInfo{
 		Status:                     powerball.Status,
-		TotalFund:                  powerball.TotalFund,
+		AccuFund:                   powerball.AccuFund,
 		SaleFund:                   powerball.SaleFund,
 		LastTransToPurState:        powerball.LastTransToPurState,
 		LastTransToDrawState:       powerball.LastTransToDrawState,

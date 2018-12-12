@@ -19,18 +19,16 @@ import (
 )
 
 // ball number and range
-const (
-	RedBalls = 6
-	RedRange = 33
+var (
+	RedBalls = pty.RedBalls
+	RedRange = pty.RedRange
 
-	BlueBalls = 1
-	BlueRange = 16
+	BlueBalls = pty.BlueBalls
+	BlueRange = pty.BlueRange
 )
 
 // prize range
 const (
-	PrizeRange = 7
-
 	Zero = iota
 	First
 	Second
@@ -38,6 +36,8 @@ const (
 	Fourth
 	Fifth
 	Sixth
+
+	PrizeRange = 7
 )
 
 // prize proportion, per mille
@@ -53,10 +53,7 @@ const (
 
 // allocation proportion, per mille
 const (
-	CurrentRatio  = 890 //当期奖池
-	NextRatio     = 100 //下期奖池
-	PlatformRatio = 5   //平台
-	DevelopRatio  = 5   //开发者
+	NextRatio = 100 //当期销售收入按一定比例进入下期奖池
 )
 
 // platform and develop account address
@@ -66,8 +63,8 @@ const (
 )
 
 const (
-	minPurBlockNum         = 30
-	minPauseBlockNum       = 40
+	minPurBlockNum         = 10
+	minPauseBlockNum       = 5
 	maxBlockNum      int64 = 4 * 60 * 12
 )
 
@@ -84,9 +81,7 @@ const (
 )
 
 //const defaultAddrPurTimes = 10
-const luckyNumMol = 100000
 const decimal = 100000000 //1e8
-const randMolNum = 5
 const grpcRecSize int = 5 * 30 * 1024 * 1024
 const blockNum = 5
 
@@ -97,22 +92,24 @@ type PowerballDB struct {
 
 // NewPowerballDB method
 func NewPowerballDB(powerballId string, purTime string, drawTime string, ticketPrice int64,
-	blockHeight int64, addr string) *PowerballDB {
+	platformRatio int64, developRatio int64, blockHeight int64, addr string) *PowerballDB {
 	ball := &PowerballDB{}
 	ball.PowerballId = powerballId
 	ball.PurTime = purTime
 	ball.DrawTime = drawTime
 	ball.TicketPrice = ticketPrice
+	ball.PlatformRatio = platformRatio
+	ball.DevelopRatio = developRatio
 	ball.CreateHeight = blockHeight
-	ball.TotalFund = 0
+	ball.AccuFund = 0
 	ball.SaleFund = 0
 	ball.Status = pty.PowerballCreated
 	ball.TotalPurchasedTxNum = 0
 	ball.CreateAddr = addr
 	ball.Round = 0
-	ball.MissingRecords = make([]*pty.MissingRecord, 2)
-	ball.MissingRecords[0].Times = make([]int32, RedRange)
-	ball.MissingRecords[1].Times = make([]int32, BlueRange)
+	ball.MissingRecords = make([]*pty.PowerMissingRecord, 2)
+	ball.MissingRecords[0] = &pty.PowerMissingRecord{Times: make([]int64, RedRange)}
+	ball.MissingRecords[1] = &pty.PowerMissingRecord{Times: make([]int64, BlueRange)}
 	return ball
 }
 
@@ -216,7 +213,7 @@ func (action *Action) PowerballCreate(create *pty.PowerballCreate) (*types.Recei
 
 	powerballId := common.ToHex(action.txhash)
 
-	if !isRightCreator(action.fromaddr, action.db, false) {
+	if !isRightCreator(action.fromaddr, action.db, true) {
 		return nil, pty.ErrNoPrivilege
 	}
 
@@ -227,7 +224,7 @@ func (action *Action) PowerballCreate(create *pty.PowerballCreate) (*types.Recei
 	}
 
 	ball := NewPowerballDB(powerballId, create.GetPurTime(),
-		create.GetDrawTime(), create.GetTicketPrice(), action.height, action.fromaddr)
+		create.GetDrawTime(), create.GetTicketPrice(), create.GetPlatformRatio(), create.GetDevelopRatio(), action.height, action.fromaddr)
 
 	if types.IsPara() {
 		mainHeight := action.GetMainHeightByTxHash(action.txhash)
@@ -283,7 +280,6 @@ func (action *Action) PowerballBuy(buy *pty.PowerballBuy) (*types.Receipt, error
 		ball.LastTransToPurState = action.height
 		ball.Status = pty.PowerballPurchase
 		ball.Round += 1
-		ball.TotalFund = action.GetExecAccount(ball.CreateAddr, true)
 		if types.IsPara() {
 			mainHeight := action.GetMainHeightByTxHash(action.txhash)
 			if mainHeight < 0 {
@@ -294,24 +290,24 @@ func (action *Action) PowerballBuy(buy *pty.PowerballBuy) (*types.Receipt, error
 		}
 	}
 
-	if ball.Status == pty.PowerballPurchase {
-		if types.IsPara() {
-			mainHeight := action.GetMainHeightByTxHash(action.txhash)
-			if mainHeight < 0 {
-				pblog.Error("PowerballBuy", "mainHeight", mainHeight)
-				return nil, pty.ErrPowerballStatus
-			}
-			if mainHeight-ball.LastTransToPurStateOnMain > minPurBlockNum {
-				pblog.Error("PowerballBuy", "action.height", action.height, "mainHeight", mainHeight, "LastTransToPurStateOnMain", ball.LastTransToPurStateOnMain)
-				return nil, pty.ErrPowerballStatus
-			}
-		} else {
-			if action.height-ball.LastTransToPurState > minPurBlockNum {
-				pblog.Error("PowerballBuy", "action.height", action.height, "LastTransToPurState", ball.LastTransToPurState)
-				return nil, pty.ErrPowerballStatus
-			}
-		}
-	}
+	//if ball.Status == pty.PowerballPurchase {
+	//	if types.IsPara() {
+	//		mainHeight := action.GetMainHeightByTxHash(action.txhash)
+	//		if mainHeight < 0 {
+	//			pblog.Error("PowerballBuy", "mainHeight", mainHeight)
+	//			return nil, pty.ErrPowerballStatus
+	//		}
+	//		if mainHeight-ball.LastTransToPurStateOnMain > minPurBlockNum {
+	//			pblog.Error("PowerballBuy", "action.height", action.height, "mainHeight", mainHeight, "LastTransToPurStateOnMain", ball.LastTransToPurStateOnMain)
+	//			return nil, pty.ErrPowerballStatus
+	//		}
+	//	} else {
+	//		if action.height-ball.LastTransToPurState > minPurBlockNum {
+	//			pblog.Error("PowerballBuy", "action.height", action.height, "LastTransToPurState", ball.LastTransToPurState)
+	//			return nil, pty.ErrPowerballStatus
+	//		}
+	//	}
+	//}
 
 	if ball.CreateAddr == action.fromaddr {
 		return nil, pty.ErrPowerballCreatorBuy
@@ -331,14 +327,14 @@ func (action *Action) PowerballBuy(buy *pty.PowerballBuy) (*types.Receipt, error
 		ball.PurInfos = make([]*pty.PurchaseInfo, 0, RedBalls)
 	}
 
-	newRecord := &pty.PurchaseRecord{buy.GetAmount(), buy.GetNumber(), action.GetIndex()}
+	newRecord := &pty.PowerPurchaseRecord{buy.GetAmount(), buy.GetNumber(), action.GetIndex()}
 	pblog.Debug("PowerballBuy", "amount", buy.GetAmount(), "number", buy.GetNumber())
 
 	/**********
 	Once ExecTransfer succeed, ExecFrozen succeed, no roolback needed
 	**********/
 
-	receipt, err := action.coinsAccount.ExecTransfer(action.fromaddr, ball.CreateAddr, action.execaddr, buy.GetAmount()*decimal)
+	receipt, err := action.coinsAccount.ExecTransfer(action.fromaddr, ball.CreateAddr, action.execaddr, buy.GetAmount()*ball.TicketPrice*decimal)
 	if err != nil {
 		pblog.Error("PowerballBuy.ExecTransfer", "addr", action.fromaddr, "execaddr", action.execaddr, "amount", buy.GetAmount())
 		return nil, err
@@ -346,7 +342,7 @@ func (action *Action) PowerballBuy(buy *pty.PowerballBuy) (*types.Receipt, error
 	logs = append(logs, receipt.Logs...)
 	kv = append(kv, receipt.KV...)
 
-	receipt, err = action.coinsAccount.ExecFrozen(ball.CreateAddr, action.execaddr, buy.GetAmount()*decimal)
+	receipt, err = action.coinsAccount.ExecFrozen(ball.CreateAddr, action.execaddr, buy.GetAmount()*ball.TicketPrice*decimal)
 	if err != nil {
 		pblog.Error("PowerballBuy.Frozen", "addr", ball.CreateAddr, "execaddr", action.execaddr, "amount", buy.GetAmount())
 		return nil, err
@@ -354,13 +350,15 @@ func (action *Action) PowerballBuy(buy *pty.PowerballBuy) (*types.Receipt, error
 	logs = append(logs, receipt.Logs...)
 	kv = append(kv, receipt.KV...)
 
-	ball.SaleFund += buy.GetAmount()
+	ball.SaleFund += buy.GetAmount() * ball.TicketPrice * decimal
 
 	exist := false
 	for _, info := range ball.PurInfos {
 		if info.Addr == action.fromaddr {
 			info.Records = append(info.Records, newRecord)
 			info.AmountOneRound += buy.Amount
+			exist = true
+			break
 		}
 	}
 	if !exist {
@@ -671,7 +669,7 @@ func checkPrizeLevel(luckynum *pty.BallNumber, guessnum *pty.BallNumber) int {
 }
 
 func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.PowerballUpdateBuyInfo, error) {
-	luckynum := action.findLuckyNum(false, ball)
+	luckynum := action.findLuckyNum(true, ball)
 	if luckynum == nil {
 		return nil, nil, pty.ErrPowerballErrLuckyNum
 	}
@@ -687,8 +685,9 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 	for _, info := range ball.PurInfos {
 		for _, rec := range info.Records {
 			level := checkPrizeLevel(luckynum, rec.Number)
-			info.PrizeOneRound[level]++
-			totalPrizeCnt[level]++
+			pblog.Debug("checkDraw", "guessnum", rec.Number.Balls, "level", level)
+			info.PrizeOneRound[level] += rec.Amount
+			totalPrizeCnt[level] += rec.Amount
 
 			if level > 0 {
 				newUpdateRec := &pty.PowerballUpdateRec{rec.Index, int32(level)}
@@ -697,6 +696,7 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 					if update.Addr == info.Addr {
 						update.Records = append(update.Records, newUpdateRec)
 						exist = true
+						break
 					}
 				}
 				if !exist {
@@ -709,9 +709,11 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 	}
 	pblog.Debug("checkDraw", "lenofupdate", len(updateInfo.Updates))
 
-	currentFund := (ball.SaleFund*CurrentRatio + ball.TotalFund) * decimal / 1000
-	platformFund := ball.SaleFund * PlatformRatio * decimal / 1000
-	developFund := ball.SaleFund * DevelopRatio * decimal / 1000
+	//当期奖池包括：一定比例的当期销售额，累计奖池
+	currentRatio := 1000 - NextRatio - ball.PlatformRatio - ball.DevelopRatio
+	currentFund := ball.SaleFund*currentRatio/1000 + ball.AccuFund
+	platformFund := ball.SaleFund * ball.PlatformRatio / 1000
+	developFund := ball.SaleFund * ball.DevelopRatio / 1000
 
 	sixthPrize := ball.TicketPrice * SixthRatio * decimal
 	lowPrizeFund := totalPrizeCnt[Sixth] * sixthPrize
@@ -719,11 +721,20 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 		return nil, nil, pty.ErrPowerballFundNotEnough
 	}
 	highPrizeFund := currentFund - lowPrizeFund
-	firstPrize := highPrizeFund * FirstRatio * decimal / 1000 / totalPrizeCnt[First]
-	secondPrize := highPrizeFund * SecondRatio * decimal / 1000 / totalPrizeCnt[Second]
-	thirdPrize := highPrizeFund * ThirdRatio * decimal / 1000 / totalPrizeCnt[Third]
-	fourthPrize := highPrizeFund * FourthRatio * decimal / 1000 / totalPrizeCnt[Fourth]
-	fifthPrize := highPrizeFund * FifthRatio * decimal / 1000 / totalPrizeCnt[Fifth]
+	pblog.Debug("checkDraw", "currentFund", currentFund, "lowPrizeFund", lowPrizeFund, "highPrizeFund", highPrizeFund)
+
+	for i := First; i < Fifth+1; i++ {
+		if totalPrizeCnt[i] == 0 {
+			totalPrizeCnt[i] = 1
+		}
+	}
+	firstPrize := highPrizeFund * FirstRatio / 1000 / totalPrizeCnt[First]
+	secondPrize := highPrizeFund * SecondRatio / 1000 / totalPrizeCnt[Second]
+	thirdPrize := highPrizeFund * ThirdRatio / 1000 / totalPrizeCnt[Third]
+	fourthPrize := highPrizeFund * FourthRatio / 1000 / totalPrizeCnt[Fourth]
+	fifthPrize := highPrizeFund * FifthRatio / 1000 / totalPrizeCnt[Fifth]
+	pblog.Debug("checkDraw", "firstPrize", firstPrize, "secondPrize", secondPrize, "thirdPrize", thirdPrize,
+		"fourthPrize", fourthPrize, "fifthPrize", fifthPrize)
 
 	totalPrizeFund := int64(0)
 	for _, info := range ball.PurInfos {
@@ -731,7 +742,8 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 			info.PrizeOneRound[Fourth]*fourthPrize + info.PrizeOneRound[Fifth]*fifthPrize + info.PrizeOneRound[Sixth]*sixthPrize
 		totalPrizeFund += info.FundWin
 	}
-	pblog.Debug("checkDraw", "round", ball.Round, "currentFund", currentFund, "totalPrizeFund", totalPrizeFund)
+	remainFund := currentFund - totalPrizeFund
+	pblog.Debug("checkDraw", "round", ball.Round, "currentFund", currentFund, "totalPrizeFund", totalPrizeFund, "remainFund", remainFund)
 
 	pblog.Debug("checkDraw transfer to platform", "platformFund", platformFund)
 	receipt1, err := action.coinsAccount.ExecTransferFrozen(ball.CreateAddr, PlatformAddr, action.execaddr, platformFund)
@@ -768,6 +780,9 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 	ball.TotalPurchasedTxNum = 0
 	ball.LastTransToDrawState = action.height
 	ball.LuckyNumber = luckynum
+	//累计奖池包括：一定比例的销售额，未中的高等级奖金
+	ball.AccuFund = ball.SaleFund*NextRatio/1000 + remainFund
+	ball.SaleFund = 0
 	action.recordMissing(ball)
 
 	if types.IsPara() {
@@ -783,14 +798,15 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 }
 
 func (action *Action) recordMissing(ball *PowerballDB) {
-	for _, redStr := range ball.LuckyNumber.Balls[:RedBalls] {
-		redNum, err := strconv.Atoi(redStr)
-		if err != nil {
-			pblog.Error("recordMissing invalid red ball number", "redStr", redStr)
-			continue
-		}
-		for i:= 0 ; i< RedRange;i++ {
-			if i != redNum {
+
+	for i := 0; i < RedRange; i++ {
+		for _, redStr := range ball.LuckyNumber.Balls[:RedBalls] {
+			redNum, err := strconv.Atoi(redStr)
+			if err != nil {
+				pblog.Error("recordMissing invalid red ball number", "redStr", redStr)
+				continue
+			}
+			if i+1 != redNum {
 				ball.MissingRecords[0].Times[i]++
 			}
 		}
@@ -802,8 +818,8 @@ func (action *Action) recordMissing(ball *PowerballDB) {
 			pblog.Error("recordMissing invalid blue ball number", "blueStr", blueStr)
 			continue
 		}
-		for i:= 0 ; i< BlueRange;i++ {
-			if i != blueNum {
+		for i := 0; i < BlueRange; i++ {
+			if i+1 != blueNum {
 				ball.MissingRecords[1].Times[i]++
 			}
 		}

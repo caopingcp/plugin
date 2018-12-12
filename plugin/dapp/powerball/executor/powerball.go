@@ -119,7 +119,7 @@ func (ball *Powerball) findPowerballDrawRecord(key []byte) (*pty.PowerballDrawRe
 func (ball *Powerball) savePowerballBuy(powerballlog *pty.ReceiptPowerball) (kvs []*types.KeyValue) {
 	key := calcPowerballBuyKey(powerballlog.PowerballId, powerballlog.Addr, powerballlog.Round, powerballlog.Index)
 	kv := &types.KeyValue{}
-	record := &pty.PowerballBuyRecord{powerballlog.Number, powerballlog.Amount, powerballlog.Round, 0, powerballlog.Index, powerballlog.Time, powerballlog.TxHash}
+	record := &pty.PowerballBuyRecord{powerballlog.Number, powerballlog.Amount, powerballlog.Round, Zero, powerballlog.Index, powerballlog.Time, powerballlog.TxHash}
 	kv = &types.KeyValue{Key: key, Value: types.Encode(record)}
 
 	kvs = append(kvs, kv)
@@ -144,7 +144,7 @@ func (ball *Powerball) updatePowerballBuy(powerballlog *pty.ReceiptPowerball, is
 				key := calcPowerballBuyKey(powerballlog.PowerballId, update.Addr, powerballlog.Round, updateRec.Index)
 				record, err := ball.findPowerballBuyRecord(key)
 				if err != nil || record == nil {
-					return kvs
+					return
 				}
 				kv := &types.KeyValue{}
 
@@ -152,7 +152,7 @@ func (ball *Powerball) updatePowerballBuy(powerballlog *pty.ReceiptPowerball, is
 					pblog.Debug("updatePowerballBuy update key")
 					record.Type = updateRec.Type
 				} else {
-					record.Type = 0
+					record.Type = Zero
 				}
 
 				kv = &types.KeyValue{key, types.Encode(record)}

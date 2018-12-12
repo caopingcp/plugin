@@ -17,7 +17,7 @@ func (l *Powerball) execLocal(tx *types.Transaction, receipt *types.ReceiptData)
 	}
 	for _, item := range receipt.Logs {
 		switch item.Ty {
-		case pty.TyLogPowerballCreate, pty.TyLogPowerballBuy, pty.TyLogPowerballDraw, pty.TyLogPowerballClose:
+		case pty.TyLogPowerballCreate, pty.TyLogPowerballBuy, pty.TyLogPowerballPause, pty.TyLogPowerballDraw, pty.TyLogPowerballClose:
 			var powerballlog pty.ReceiptPowerball
 			err := types.Decode(item.Log, &powerballlog)
 			if err != nil {
@@ -45,6 +45,10 @@ func (l *Powerball) ExecLocal_Create(payload *pty.PowerballCreate, tx *types.Tra
 }
 
 func (l *Powerball) ExecLocal_Buy(payload *pty.PowerballBuy, tx *types.Transaction, receiptData *types.ReceiptData, index int) (*types.LocalDBSet, error) {
+	return l.execLocal(tx, receiptData)
+}
+
+func (l *Powerball) ExecLocal_Pause(payload *pty.PowerballPause, tx *types.Transaction, receiptData *types.ReceiptData, index int) (*types.LocalDBSet, error) {
 	return l.execLocal(tx, receiptData)
 }
 

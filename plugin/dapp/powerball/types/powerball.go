@@ -7,6 +7,7 @@ package types
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 
 	"github.com/33cn/chain33/common/address"
 	log "github.com/33cn/chain33/common/log/log15"
@@ -116,6 +117,8 @@ func CreateRawPowerballCreateTx(parm *PowerballCreateTx) (*types.Transaction, er
 		PurTime:  parm.PurTime,
 		DrawTime: parm.DrawTime,
 		TicketPrice: parm.TicketPrice,
+		PlatformRatio: parm.PlatformRatio,
+		DevelopRatio: parm.DevelopRatio,
 	}
 	create := &PowerballAction{
 		Ty:    PowerballActionCreate,
@@ -140,11 +143,24 @@ func CreateRawPowerballBuyTx(parm *PowerballBuyTx) (*types.Transaction, error) {
 		plog.Error("CreateRawPowerballBuyTx", "parm", parm)
 		return nil, types.ErrInvalidParam
 	}
+	balls := strings.Split(parm.Number, ",")
+	if len(balls) != RedBalls+BlueBalls {
+		plog.Error("CreateRawPowerballBuyTx", "len", len(balls))
+		return nil, types.ErrInvalidParam
+	}
+	for i := 0; i< RedBalls-1; i++ {
+		for j:= i+1;j< RedBalls;j++ {
+			if balls[i] == balls[j] {
+				plog.Error("CreateRawPowerballBuyTx same red ball", "ballNumber", balls[i])
+				return nil, types.ErrInvalidParam
+			}
+		}
+	}
 
 	v := &PowerballBuy{
 		PowerballId: parm.PowerballId,
 		Amount:      parm.Amount,
-		Number:      &BallNumber{parm.Number},
+		Number:      &BallNumber{balls},
 	}
 	buy := &PowerballAction{
 		Ty:    PowerballActionBuy,

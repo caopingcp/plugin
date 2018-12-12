@@ -17,7 +17,7 @@ func (l *Powerball) execDelLocal(tx *types.Transaction, receiptData *types.Recei
 	}
 	for _, item := range receiptData.Logs {
 		switch item.Ty {
-		case pty.TyLogPowerballCreate, pty.TyLogPowerballBuy, pty.TyLogPowerballDraw, pty.TyLogPowerballClose:
+		case pty.TyLogPowerballCreate, pty.TyLogPowerballBuy, pty.TyLogPowerballPause, pty.TyLogPowerballDraw, pty.TyLogPowerballClose:
 			var powerballlog pty.ReceiptPowerball
 			err := types.Decode(item.Log, &powerballlog)
 			if err != nil {
@@ -46,6 +46,10 @@ func (l *Powerball) ExecDelLocal_Create(payload *pty.PowerballCreate, tx *types.
 }
 
 func (l *Powerball) ExecDelLocal_Buy(payload *pty.PowerballBuy, tx *types.Transaction, receiptData *types.ReceiptData, index int) (*types.LocalDBSet, error) {
+	return nil, nil
+}
+
+func (l *Powerball) ExecDelLocal_Pause(payload *pty.PowerballPause, tx *types.Transaction, receiptData *types.ReceiptData, index int) (*types.LocalDBSet, error) {
 	return nil, nil
 }
 

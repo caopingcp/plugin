@@ -6,6 +6,15 @@ package types
 
 const PowerballX = "powerball"
 
+// ball number and range
+const (
+	RedBalls = 6
+	RedRange = 33
+
+	BlueBalls = 1
+	BlueRange = 16
+)
+
 //Powerball status
 const (
 	PowerballNil = iota

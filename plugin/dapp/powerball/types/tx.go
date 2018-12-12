@@ -5,17 +5,19 @@
 package types
 
 type PowerballCreateTx struct {
-	PurTime     string `json:"purTime"`
-	DrawTime    string `json:"drawTime"`
-	TicketPrice int64  `json:"ticketPrice"`
-	Fee         int64  `json:"fee"`
+	PurTime       string `json:"purTime"`
+	DrawTime      string `json:"drawTime"`
+	TicketPrice   int64  `json:"ticketPrice"`
+	PlatformRatio int64  `json:"platformRatio"`
+	DevelopRatio  int64  `json:"developRatio"`
+	Fee           int64  `json:"fee"`
 }
 
 type PowerballBuyTx struct {
-	PowerballId string   `json:"powerballId"`
-	Amount      int64    `json:"amount"`
-	Number      []string `json:"number"`
-	Fee         int64    `json:"fee"`
+	PowerballId string `json:"powerballId"`
+	Amount      int64  `json:"amount"`
+	Number      string `json:"number"`
+	Fee         int64  `json:"fee"`
 }
 
 type PowerballPauseTx struct {

@@ -214,13 +214,13 @@ func (d *DriverBase) Exec(tx *types.Transaction, index int) (receipt *types.Rece
 	if d.ety == nil {
 		return nil, nil
 	}
-	defer func() {
-		if r := recover(); r != nil {
-			blog.Error("call exec error", "tx.exec", tx.Execer, "info", r)
-			err = types.ErrActionNotSupport
-			receipt = nil
-		}
-	}()
+	//defer func() {
+	//	if r := recover(); r != nil {
+	//		blog.Error("call exec error", "tx.exec", tx.Execer, "info", r)
+	//		err = types.ErrActionNotSupport
+	//		receipt = nil
+	//	}
+	//}()
 	//为了兼容原来的系统,多加了一个判断
 	if d.child.GetPayloadValue() == nil {
 		return nil, nil

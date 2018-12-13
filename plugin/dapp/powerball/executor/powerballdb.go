@@ -107,6 +107,7 @@ func NewPowerballDB(powerballId string, purTime string, drawTime string, ticketP
 	ball.TotalPurchasedTxNum = 0
 	ball.CreateAddr = addr
 	ball.Round = 0
+	ball.LuckyNumber = nil
 	ball.MissingRecords = make([]*pty.PowerMissingRecord, 2)
 	ball.MissingRecords[0] = &pty.PowerMissingRecord{Times: make([]int64, RedRange)}
 	ball.MissingRecords[1] = &pty.PowerMissingRecord{Times: make([]int64, BlueRange)}
@@ -280,6 +281,7 @@ func (action *Action) PowerballBuy(buy *pty.PowerballBuy) (*types.Receipt, error
 		ball.LastTransToPurState = action.height
 		ball.Status = pty.PowerballPurchase
 		ball.Round += 1
+		ball.LuckyNumber = nil
 		if types.IsPara() {
 			mainHeight := action.GetMainHeightByTxHash(action.txhash)
 			if mainHeight < 0 {
@@ -685,7 +687,7 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 	for _, info := range ball.PurInfos {
 		for _, rec := range info.Records {
 			level := checkPrizeLevel(luckynum, rec.Number)
-			pblog.Debug("checkDraw", "guessnum", rec.Number.Balls, "level", level)
+			pblog.Debug("checkDraw", "guessnum", rec.Number.Balls, "level", level, "amount", rec.Amount)
 			info.PrizeOneRound[level] += rec.Amount
 			totalPrizeCnt[level] += rec.Amount
 
@@ -798,32 +800,27 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 }
 
 func (action *Action) recordMissing(ball *PowerballDB) {
-
 	for i := 0; i < RedRange; i++ {
-		for _, redStr := range ball.LuckyNumber.Balls[:RedBalls] {
-			redNum, err := strconv.Atoi(redStr)
-			if err != nil {
-				pblog.Error("recordMissing invalid red ball number", "redStr", redStr)
-				continue
+		redStr := fmt.Sprintf("%02d", i+1)
+		exist := false
+		for _, luck := range ball.LuckyNumber.Balls[:RedBalls] {
+			if luck == redStr {
+				exist = true
+				break
 			}
-			if i+1 != redNum {
-				ball.MissingRecords[0].Times[i]++
-			}
+		}
+		if !exist {
+			ball.MissingRecords[0].Times[i]++
 		}
 	}
 
-	for _, blueStr := range ball.LuckyNumber.Balls[RedBalls:] {
-		blueNum, err := strconv.Atoi(blueStr)
-		if err != nil {
-			pblog.Error("recordMissing invalid blue ball number", "blueStr", blueStr)
-			continue
-		}
-		for i := 0; i < BlueRange; i++ {
-			if i+1 != blueNum {
-				ball.MissingRecords[1].Times[i]++
-			}
+	for i := 0; i < BlueRange; i++ {
+		blueStr := fmt.Sprintf("%02d", i+1)
+		if blueStr != ball.LuckyNumber.Balls[RedBalls] {
+			ball.MissingRecords[1].Times[i]++
 		}
 	}
+
 }
 
 func getManageKey(key string, db dbm.KV) ([]byte, error) {

@@ -5,7 +5,9 @@
 package executor
 
 import (
+	"context"
 	"fmt"
+	"github.com/pkg/errors"
 	"strconv"
 
 	"github.com/33cn/chain33/account"
@@ -117,7 +119,7 @@ func NewPowerballDB(powerballId string, purTime string, drawTime string, ticketP
 // GetKVSet method
 func (ball *PowerballDB) GetKVSet() (kvset []*types.KeyValue) {
 	value := types.Encode(&ball.Powerball)
-	kvset = append(kvset, &types.KeyValue{Key:Key(ball.PowerballId), Value:value})
+	kvset = append(kvset, &types.KeyValue{Key: Key(ball.PowerballId), Value: value})
 	return kvset
 }
 
@@ -244,7 +246,7 @@ func (action *Action) PowerballCreate(create *pty.PowerballCreate) (*types.Recei
 	receiptLog := action.GetReceiptLog(&ball.Powerball, pty.PowerballNil, pty.TyLogPowerballCreate, 0, nil, 0, nil, nil)
 	logs = append(logs, receiptLog)
 
-	receipt = &types.Receipt{Ty:types.ExecOk, KV:kv, Logs:logs}
+	receipt = &types.Receipt{Ty: types.ExecOk, KV: kv, Logs: logs}
 	return receipt, nil
 }
 
@@ -380,7 +382,7 @@ func (action *Action) PowerballBuy(buy *pty.PowerballBuy) (*types.Receipt, error
 	receiptLog := action.GetReceiptLog(&ball.Powerball, preStatus, pty.TyLogPowerballBuy, ball.Round, buy.GetNumber(), buy.GetAmount(), nil, nil)
 	logs = append(logs, receiptLog)
 
-	receipt = &types.Receipt{Ty:types.ExecOk, KV:kv, Logs:logs}
+	receipt = &types.Receipt{Ty: types.ExecOk, KV: kv, Logs: logs}
 	return receipt, nil
 }
 
@@ -432,7 +434,7 @@ func (action *Action) PowerballPause(pause *pty.PowerballPause) (*types.Receipt,
 	receiptLog := action.GetReceiptLog(&ball.Powerball, preStatus, pty.TyLogPowerballPause, 0, nil, 0, nil, nil)
 	logs = append(logs, receiptLog)
 
-	return &types.Receipt{Ty:types.ExecOk, KV:kv, Logs:logs}, nil
+	return &types.Receipt{Ty: types.ExecOk, KV: kv, Logs: logs}, nil
 }
 
 // PowerballDraw draw powerball
@@ -472,7 +474,7 @@ func (action *Action) PowerballDraw(draw *pty.PowerballDraw) (*types.Receipt, er
 	receiptLog := action.GetReceiptLog(&ball.Powerball, preStatus, pty.TyLogPowerballDraw, ball.Round, nil, 0, ball.LuckyNumber, updateInfo)
 	logs = append(logs, receiptLog)
 
-	receipt = &types.Receipt{Ty:types.ExecOk, KV:kv, Logs:logs}
+	receipt = &types.Receipt{Ty: types.ExecOk, KV: kv, Logs: logs}
 	return receipt, nil
 }
 
@@ -537,46 +539,7 @@ func (action *Action) PowerballClose(draw *pty.PowerballClose) (*types.Receipt, 
 	receiptLog := action.GetReceiptLog(&ball.Powerball, preStatus, pty.TyLogPowerballClose, 0, nil, 0, nil, nil)
 	logs = append(logs, receiptLog)
 
-	return &types.Receipt{Ty:types.ExecOk, KV:kv, Logs:logs}, nil
-}
-
-func (action *Action) GetModify(beg, end int64, randMolNum int64) ([]byte, error) {
-	//通过某个区间计算modify
-	total := int64(0)
-	newmodify := ""
-	for i := beg; i < end; i += randMolNum {
-		req := &types.ReqBlocks{Start:i, End:i, IsDetail:false, Pid:[]string{""}}
-		blocks, err := action.api.GetBlocks(req)
-		if err != nil {
-			return []byte{}, err
-		}
-		block := blocks.Items[0].Block
-		total += block.BlockTime
-	}
-
-	//for main chain, 5 latest block
-	//for para chain, 5 latest block -- 5 sequence main block
-	txActions, err := action.getTxActions(end, blockNum)
-	if err != nil {
-		return nil, err
-	}
-
-	//modify, bits, id
-	var modifies []byte
-	var bits uint32
-	var ticketIds string
-
-	for _, ticketAction := range txActions {
-		pblog.Debug("GetModify", "modify", ticketAction.GetMiner().GetModify(), "bits", ticketAction.GetMiner().GetBits(), "ticketId", ticketAction.GetMiner().GetTicketId())
-		modifies = append(modifies, ticketAction.GetMiner().GetModify()...)
-		bits += ticketAction.GetMiner().GetBits()
-		ticketIds += ticketAction.GetMiner().GetTicketId()
-	}
-
-	newmodify = fmt.Sprintf("%s:%s:%d:%d", string(modifies), ticketIds, total, bits)
-
-	modify := common.Sha256([]byte(newmodify))
-	return modify, nil
+	return &types.Receipt{Ty: types.ExecOk, KV: kv, Logs: logs}, nil
 }
 
 func (action *Action) findLuckyNum(isSolo bool, ball *PowerballDB) *pty.BallNumber {
@@ -585,22 +548,19 @@ func (action *Action) findLuckyNum(isSolo bool, ball *PowerballDB) *pty.BallNumb
 		//used for internal verfiy
 		numStr = []string{"01", "02", "03", "04", "05", "06", "07"}
 	} else {
-		totalBlockNum := action.height - ball.LastTransToPurState
-		randMolNum := (ball.TotalPurchasedTxNum+totalBlockNum)%int64(RedRange) + totalBlockNum/int64(RedRange)
-
-		modify, err := action.GetModify(ball.LastTransToPurState, action.height-1, randMolNum)
-		pblog.Error("findLuckyNum", "begin", ball.LastTransToPurState, "end", action.height-1, "randMolNum", randMolNum)
-
+		modify, err := action.getRandHash()
 		if err != nil {
 			pblog.Error("findLuckyNum", "err", err)
 			return nil
 		}
+		pblog.Info("findLuckyNum", "modify", common.ToHex(modify))
 
 		seeds, err := genSeeds(modify, RedBalls+BlueBalls)
 		if err != nil {
 			pblog.Error("findLuckyNum", "err", err)
 			return nil
 		}
+		pblog.Info("findLuckyNum", "seeds", seeds)
 
 		redStr := genRandSet(RedRange, seeds[:RedBalls])
 		blueStr := genRandSet(BlueRange, seeds[RedBalls:])
@@ -608,6 +568,31 @@ func (action *Action) findLuckyNum(isSolo bool, ball *PowerballDB) *pty.BallNumb
 		numStr = append(numStr, blueStr...)
 	}
 	return &pty.BallNumber{Balls: numStr}
+}
+
+func (action *Action) getRandHash() ([]byte, error) {
+	//在主链上，当前高度查询不到，如果要保证区块个数，高度传入action.height-1
+	if !types.IsPara() {
+		req := &types.ReqRandHash{ExecName: "ticket", Height: action.height - 1, BlockNum: blockNum}
+		msg, err := action.api.Query("ticket", "RandNumHash", req)
+		if err != nil {
+			return nil, err
+		}
+		reply := msg.(*types.ReplyHash)
+		return reply.Hash, nil
+	} else {
+		mainHeight := action.GetMainHeightByTxHash(action.txhash)
+		if mainHeight < 0 {
+			pblog.Error("getRandHash", "mainHeight", mainHeight)
+			return nil, errors.New("wrong height in mainchain")
+		}
+		req := &types.ReqRandHash{ExecName: "ticket", Height: mainHeight, BlockNum: blockNum}
+		reply, err := action.grpcClient.QueryRandNum(context.Background(), req)
+		if err != nil {
+			return nil, err
+		}
+		return reply.Hash, nil
+	}
 }
 
 func genSeeds(modify []byte, count int) ([]uint64, error) {
@@ -671,7 +656,7 @@ func checkPrizeLevel(luckynum *pty.BallNumber, guessnum *pty.BallNumber) int {
 }
 
 func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.PowerballUpdateBuyInfo, error) {
-	luckynum := action.findLuckyNum(true, ball)
+	luckynum := action.findLuckyNum(false, ball)
 	if luckynum == nil {
 		return nil, nil, pty.ErrPowerballErrLuckyNum
 	}
@@ -796,7 +781,7 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 		ball.LastTransToDrawStateOnMain = mainHeight
 	}
 
-	return &types.Receipt{Ty:types.ExecOk, KV:kv, Logs:logs}, &updateInfo, nil
+	return &types.Receipt{Ty: types.ExecOk, KV: kv, Logs: logs}, &updateInfo, nil
 }
 
 func (action *Action) recordMissing(ball *PowerballDB) {

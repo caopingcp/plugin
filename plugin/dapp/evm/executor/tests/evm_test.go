@@ -106,7 +106,7 @@ func runDir(tt *testing.T, basePath string) {
 }
 
 func runCase(tt *testing.T, c VMCase, file string) {
-	tt.Logf("runing test case:%s in file:%s", c.name, file)
+	tt.Logf("running test case:%s in file:%s", c.name, file)
 
 	// 1 构建预置环境 pre
 	inst := evm.NewEVMExecutor()
@@ -137,19 +137,18 @@ func runCase(tt *testing.T, c VMCase, file string) {
 		ret, _, _, err = env.Call(runtime.AccountRef(msg.From()), *common.StringToAddress(c.exec.address), msg.Data(), msg.GasLimit(), msg.Value())
 	} else {
 		addr := crypto.RandomContractAddress()
-		ret, _, _, err = env.Create(runtime.AccountRef(msg.From()), *addr, msg.Data(), msg.GasLimit(), "testExecName", "")
+		ret, _, _, err = env.Create(runtime.AccountRef(msg.From()), *addr, msg.Data(), msg.GasLimit(), "testExecName", "", "")
 	}
 
 	if err != nil {
 		// 合约执行出错的情况下，判断错误是否相同，如果相同，则返回，不判断post
 		if len(c.err) > 0 && c.err == err.Error() {
 			return
-		} else {
-			// 非意料情况下的出错，视为错误
-			tt.Errorf("test case:%s, failed:%s", c.name, err)
-			tt.Fail()
-			return
 		}
+		// 非意料情况下的出错，视为错误
+		tt.Errorf("test case:%s, failed:%s", c.name, err)
+		tt.Fail()
+		return
 	}
 	// 4 检查执行结果 post (注意，这里不检查Gas具体扣费数额，因为计费规则不一样，值检查执行结果是否正确)
 	t := NewTester(tt)
@@ -201,5 +200,5 @@ func buildMsg(c VMCase) *common.Message {
 	addr2 := common.StringToAddress(c.exec.address)
 	gasLimit := uint64(210000000)
 	gasPrice := c.exec.gasPrice
-	return common.NewMessage(*addr1, addr2, int64(1), uint64(c.exec.value), gasLimit, uint32(gasPrice), code, "")
+	return common.NewMessage(*addr1, addr2, int64(1), uint64(c.exec.value), gasLimit, uint32(gasPrice), code, "", "")
 }

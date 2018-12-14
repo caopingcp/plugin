@@ -39,8 +39,9 @@ isParaChain=false
 enableTxQuickIndex=false
 
 [p2p]
+port=13802
 seeds=[]
-enable=false
+enable=true
 isSeed=false
 serverStart=true
 innerSeedEnable=true
@@ -58,11 +59,28 @@ grpcBindAddr="localhost:8802"
 whitelist=["127.0.0.1"]
 jrpcFuncWhitelist=["*"]
 grpcFuncWhitelist=["*"]
+enableTLS=true
+certFile="cert.pem"
+keyFile="key.pem"
 
 [mempool]
+name="timeline"
 poolCacheSize=10240
 minTxFee=100000
 maxTxNumPerAccount=10000
+
+[mempool.sub.timeline]
+poolCacheSize=10240
+minTxFee=100000
+maxTxNumPerAccount=10000
+
+[mempool.sub.trade]
+poolCacheSize=10240
+minTxFee=100000
+maxTxNumPerAccount=10000
+timeParam=1      #时间占价格比例
+priceConstant=1  #一个合适的常量
+pricePower=0     #手续费占常量比例
 
 [consensus]
 name="solo"
@@ -126,6 +144,7 @@ name="mavl"
 driver="leveldb"
 dbPath="datadir/mavltree"
 dbCache=128
+localdbVersion="1.0.0"
 
 [store.sub.mavl]
 enableMavlPrefix=false

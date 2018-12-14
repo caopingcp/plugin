@@ -35,10 +35,12 @@ func init() {
 	ety.InitFuncList(types.ListMethod(&trade{}))
 }
 
+// Init : 注册当前trade合约
 func Init(name string, sub []byte) {
 	drivers.Register(GetName(), newTrade, types.GetDappFork(driverName, "Enable"))
 }
 
+// GetName : 获取trade合约名字
 func GetName() string {
 	return newTrade().GetName()
 }
@@ -199,4 +201,9 @@ func saveBuyMarketOrderKeyValue(kv []*types.KeyValue, receipt *pty.ReceiptBuyBas
 
 func deleteBuyMarketOrderKeyValue(kv []*types.KeyValue, receipt *pty.ReceiptBuyBase, status int32, height int64) []*types.KeyValue {
 	return genBuyMarketOrderKeyValue(kv, receipt, status, height, nil)
+}
+
+// CheckReceiptExecOk return true to check if receipt ty is ok
+func (t *trade) CheckReceiptExecOk() bool {
+	return true
 }

@@ -16,7 +16,7 @@ import (
 	"github.com/33cn/chain33/util"
 )
 
-// 处理共识模块过来的blockdetail，peer广播过来的block，以及从peer同步过来的block
+//ProcessBlock 处理共识模块过来的blockdetail，peer广播过来的block，以及从peer同步过来的block
 // 共识模块和peer广播过来的block需要广播出去
 //共识模块过来的Receipts不为空,广播和同步过来的Receipts为空
 // 返回参数说明：是否主链，是否孤儿节点，具体err
@@ -236,7 +236,7 @@ func (b *BlockChain) connectBestChain(node *blockNode, block *types.BlockDetail)
 	tiptd, _ := b.blockStore.GetTdByBlockHash(b.bestChain.Tip().hash)
 	parenttd, _ := b.blockStore.GetTdByBlockHash(parentHash)
 	if parenttd == nil {
-		chainlog.Error("connectBestChain parenttd is not exits!", "hieght", block.Block.Height, "parentHash", common.ToHex(parentHash), "block.Block.hash", common.ToHex(block.Block.Hash()))
+		chainlog.Error("connectBestChain parenttd is not exits!", "height", block.Block.Height, "parentHash", common.ToHex(parentHash), "block.Block.hash", common.ToHex(block.Block.Hash()))
 		return nil, false, types.ErrParentTdNoExist
 	}
 	blocktd := new(big.Int).Add(node.Difficulty, parenttd)
@@ -274,7 +274,6 @@ func (b *BlockChain) connectBestChain(node *blockNode, block *types.BlockDetail)
 
 //将本block信息存储到数据库中，并更新bestchain的tip节点
 func (b *BlockChain) connectBlock(node *blockNode, blockdetail *types.BlockDetail) (*types.BlockDetail, error) {
-
 	//blockchain close 时不再处理block
 	if atomic.LoadInt32(&b.isclosed) == 1 {
 		return nil, types.ErrIsClosed
@@ -293,6 +292,8 @@ func (b *BlockChain) connectBlock(node *blockNode, blockdetail *types.BlockDetai
 	}
 
 	var err error
+	var lastSequence int64
+
 	block := blockdetail.Block
 	prevStateHash := b.bestChain.Tip().statehash
 	//广播或者同步过来的blcok需要调用执行模块
@@ -308,27 +309,25 @@ func (b *BlockChain) connectBlock(node *blockNode, blockdetail *types.BlockDetai
 	}
 	//要更新node的信息
 	if node.pid == "self" {
-		//update node info
 		prevhash := node.hash
 		node.statehash = blockdetail.Block.GetStateHash()
 		node.hash = blockdetail.Block.Hash()
 		b.index.UpdateNode(prevhash, node)
 	}
-	beg := types.Now()
-	// 写入磁盘
-	//批量将block信息写入磁盘
 
+	beg := types.Now()
+	// 写入磁盘 批量将block信息写入磁盘
 	newbatch := b.blockStore.NewBatch(sync)
-	//保存tx信息到db中 (newbatch, blockdetail)
+
+	//保存tx信息到db中
 	err = b.blockStore.AddTxs(newbatch, blockdetail)
 	if err != nil {
 		chainlog.Error("connectBlock indexTxs:", "height", block.Height, "err", err)
 		return nil, err
 	}
-	//chainlog.Debug("connectBlock AddTxs!", "height", block.Height, "batchsync", sync)
 
 	//保存block信息到db中
-	err = b.blockStore.SaveBlock(newbatch, blockdetail, node.sequence)
+	lastSequence, err = b.blockStore.SaveBlock(newbatch, blockdetail, node.sequence)
 	if err != nil {
 		chainlog.Error("connectBlock SaveBlock:", "height", block.Height, "err", err)
 		return nil, err
@@ -348,8 +347,6 @@ func (b *BlockChain) connectBlock(node *blockNode, blockdetail *types.BlockDetai
 			return nil, err
 		}
 		blocktd = new(big.Int).Add(difficulty, parenttd)
-		//chainlog.Error("connectBlock Difficulty", "height", block.Height, "parenttd.td", difficulty.BigToCompact(parenttd))
-		//chainlog.Error("connectBlock Difficulty", "height", block.Height, "self.td", difficulty.BigToCompact(blocktd))
 	}
 
 	err = b.blockStore.SaveTdByBlockHash(newbatch, blockdetail.Block.Hash(), blocktd)
@@ -389,11 +386,16 @@ func (b *BlockChain) connectBlock(node *blockNode, blockdetail *types.BlockDetai
 			b.SendBlockBroadcast(blockdetail)
 		}
 	}
+	//目前非平行链并开启isRecordBlockSequence功能
+	if isRecordBlockSequence && !isParaChain {
+		b.pushseq.updateSeq(lastSequence)
+	}
 	return blockdetail, nil
 }
 
 //从主链中删除blocks
 func (b *BlockChain) disconnectBlock(node *blockNode, blockdetail *types.BlockDetail, sequence int64) error {
+	var lastSequence int64
 	// 只能从 best chain tip节点开始删除
 	if !bytes.Equal(node.hash, b.bestChain.Tip().hash) {
 		chainlog.Error("disconnectBlock:", "height", blockdetail.Block.Height, "node.hash", common.ToHex(node.hash), "bestChain.top.hash", common.ToHex(b.bestChain.Tip().hash))
@@ -411,7 +413,7 @@ func (b *BlockChain) disconnectBlock(node *blockNode, blockdetail *types.BlockDe
 	}
 
 	//从db中删除block相关的信息
-	err = b.blockStore.DelBlock(newbatch, blockdetail, sequence)
+	lastSequence, err = b.blockStore.DelBlock(newbatch, blockdetail, sequence)
 	if err != nil {
 		chainlog.Error("disconnectBlock DelBlock:", "height", blockdetail.Block.Height, "err", err)
 		return err
@@ -422,7 +424,6 @@ func (b *BlockChain) disconnectBlock(node *blockNode, blockdetail *types.BlockDe
 		go util.ReportErrEventToFront(chainlog, b.client, "blockchain", "wallet", types.ErrDataBaseDamage)
 		return err
 	}
-
 	//更新最新的高度和header为上一个块
 	b.blockStore.UpdateHeight()
 	b.blockStore.UpdateLastBlock(blockdetail.Block.ParentHash)
@@ -432,7 +433,6 @@ func (b *BlockChain) disconnectBlock(node *blockNode, blockdetail *types.BlockDe
 
 	//通知共识，mempool和钱包删除block
 	b.SendDelBlockEvent(blockdetail)
-
 	b.query.updateStateHash(node.parent.statehash)
 
 	//确定node的父节点升级成tip节点
@@ -452,6 +452,10 @@ func (b *BlockChain) disconnectBlock(node *blockNode, blockdetail *types.BlockDe
 	chainlog.Debug("disconnectBlock success", "newtipnode.height", newtipnode.height, "node.parent.height", node.parent.height)
 	chainlog.Debug("disconnectBlock success", "newtipnode.hash", common.ToHex(newtipnode.hash), "delblock.parent.hash", common.ToHex(blockdetail.Block.GetParentHash()))
 
+	//目前非平行链并开启isRecordBlockSequence功能
+	if isRecordBlockSequence && !isParaChain {
+		b.pushseq.updateSeq(lastSequence)
+	}
 	return nil
 }
 
@@ -474,6 +478,7 @@ func (b *BlockChain) getReorganizeNodes(node *blockNode) (*list.List, *list.List
 	return detachNodes, attachNodes
 }
 
+//LoadBlockByHash 根据hash值从缓存中查询区块
 func (b *BlockChain) LoadBlockByHash(hash []byte) (block *types.BlockDetail, err error) {
 	block = b.cache.GetCacheBlock(hash)
 	if block == nil {
@@ -551,7 +556,7 @@ func (b *BlockChain) reorganizeChain(detachNodes, attachNodes *list.List) error 
 	return nil
 }
 
-//只能从 best chain tip节点开始删除，目前只提供给平行链使用
+//ProcessDelParaChainBlock 只能从 best chain tip节点开始删除，目前只提供给平行链使用
 func (b *BlockChain) ProcessDelParaChainBlock(broadcast bool, blockdetail *types.BlockDetail, pid string, sequence int64) (*types.BlockDetail, bool, bool, error) {
 
 	//获取当前的tip节点

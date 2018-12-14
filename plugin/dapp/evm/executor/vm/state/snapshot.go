@@ -12,7 +12,7 @@ import (
 	evmtypes "github.com/33cn/plugin/plugin/dapp/evm/types"
 )
 
-// 数据状态变更接口
+// DataChange 数据状态变更接口
 // 所有的数据状态变更事件实现此接口，并且封装各自的变更数据以及回滚动作
 // 在调用合约时（具体的Tx执行时），会根据操作生成对应的变更对象并缓存下来
 // 如果合约执行出错，会按生成顺序的倒序，依次调用变更对象的回滚接口进行数据回滚，并同步删除变更对象缓存
@@ -23,14 +23,15 @@ type DataChange interface {
 	getLog(mdb *MemoryStateDB) []*types.ReceiptLog
 }
 
-// 版本结构，包含版本号以及当前版本包含的变更对象在变更序列中的开始序号
+// Snapshot 版本结构，包含版本号以及当前版本包含的变更对象在变更序列中的开始序号
 type Snapshot struct {
 	id      int
 	entries []DataChange
 	statedb *MemoryStateDB
 }
 
-func (ver *Snapshot) GetId() int {
+// GetID 获取ID
+func (ver *Snapshot) GetID() int {
 	return ver.id
 }
 
@@ -120,6 +121,13 @@ type (
 		baseChange
 		account            string
 		prevcode, prevhash []byte
+	}
+
+	// 合约ABI变更事件
+	abiChange struct {
+		baseChange
+		account string
+		prevabi string
 	}
 
 	// 返还金额变更事件
@@ -235,6 +243,22 @@ func (ch codeChange) getData(mdb *MemoryStateDB) (kvset []*types.KeyValue) {
 	return nil
 }
 
+func (ch abiChange) revert(mdb *MemoryStateDB) {
+	acc := mdb.accounts[ch.account]
+	if acc != nil {
+		acc.Data.Abi = ch.prevabi
+	}
+}
+
+func (ch abiChange) getData(mdb *MemoryStateDB) (kvset []*types.KeyValue) {
+	acc := mdb.accounts[ch.account]
+	if acc != nil {
+		kvset = append(kvset, acc.GetDataKV()...)
+		return kvset
+	}
+	return nil
+}
+
 func (ch storageChange) revert(mdb *MemoryStateDB) {
 	acc := mdb.accounts[ch.account]
 	if acc != nil {
@@ -251,7 +275,7 @@ func (ch storageChange) getData(mdb *MemoryStateDB) []*types.KeyValue {
 }
 
 func (ch storageChange) getLog(mdb *MemoryStateDB) []*types.ReceiptLog {
-	if types.IsDappFork(mdb.blockHeight, "evm", "ForkEVMState") {
+	if types.IsDappFork(mdb.blockHeight, "evm", evmtypes.ForkEVMState) {
 		acc := mdb.accounts[ch.account]
 		if acc != nil {
 			currentVal := acc.GetState(ch.key)

@@ -9,6 +9,7 @@ import (
 	evmtypes "github.com/33cn/plugin/plugin/dapp/evm/types"
 )
 
+// ExecDelLocal 处理区块回滚
 func (evm *EVMExecutor) ExecDelLocal(tx *types.Transaction, receipt *types.ReceiptData, index int) (*types.LocalDBSet, error) {
 	set, err := evm.DriverBase.ExecDelLocal(tx, receipt, index)
 	if err != nil {
@@ -18,7 +19,7 @@ func (evm *EVMExecutor) ExecDelLocal(tx *types.Transaction, receipt *types.Recei
 		return set, nil
 	}
 
-	if types.IsDappFork(evm.GetHeight(), "evm", "ForkEVMState") {
+	if types.IsDappFork(evm.GetHeight(), "evm", evmtypes.ForkEVMState) {
 		// 需要将Exec中生成的合约状态变更信息从localdb中恢复
 		for _, logItem := range receipt.Logs {
 			if evmtypes.TyLogEVMStateChangeItem == logItem.Ty {

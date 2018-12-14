@@ -5,10 +5,12 @@
 package rpc
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/33cn/chain33/client/mocks"
+	"github.com/33cn/chain33/common/version"
 	"github.com/33cn/chain33/rpc/jsonclient"
 	rpctypes "github.com/33cn/chain33/rpc/types"
 	"github.com/33cn/chain33/types"
@@ -16,7 +18,7 @@ import (
 	ty "github.com/33cn/plugin/plugin/dapp/ticket/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	context "golang.org/x/net/context"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
@@ -43,8 +45,8 @@ func TestChannelClient_BindMiner(t *testing.T) {
 	storevalue.Values = append(storevalue.Values, accv)
 	api.On("StoreGet", mock.Anything).Return(storevalue, nil)
 
-	var addrs = make([]string, 1)
-	addrs = append(addrs, "1Jn2qu84Z1SUUosWjySggBS9pKWdAP3tZt")
+	//var addrs = make([]string, 1)
+	//addrs = append(addrs, "1Jn2qu84Z1SUUosWjySggBS9pKWdAP3tZt")
 	var in = &ty.ReqBindMiner{
 		BindAddr:     "1Jn2qu84Z1SUUosWjySggBS9pKWdAP3tZt",
 		OriginAddr:   "1Jn2qu84Z1SUUosWjySggBS9pKWdAP3tZt",
@@ -125,6 +127,8 @@ func TestJrpc_GetTicketCount(t *testing.T) {
 func TestRPC_CallTestNode(t *testing.T) {
 	api := new(mocks.QueueProtocolAPI)
 	cfg, sub := testnode.GetDefaultConfig()
+	// 测试环境下，默认配置的共识为solo，需要修改
+	cfg.Consensus.Name = "ticket"
 	mock33 := testnode.NewWithConfig(cfg, sub, api)
 	defer func() {
 		mock33.Close()
@@ -140,15 +144,17 @@ func TestRPC_CallTestNode(t *testing.T) {
 		Msg:  []byte("123"),
 	}
 	api.On("IsSync").Return(ret, nil)
+	api.On("Version").Return(&types.VersionInfo{Chain33: version.GetVersion()}, nil)
 	api.On("Close").Return()
-	rpcCfg := mock33.GetCfg().Rpc
+	rpcCfg := mock33.GetCfg().RPC
 	jsonClient, err := jsonclient.NewJSONClient("http://" + rpcCfg.JrpcBindAddr + "/")
 	assert.Nil(t, err)
 	assert.NotNil(t, jsonClient)
-	var result = ""
+	var result types.VersionInfo
 	err = jsonClient.Call("Chain33.Version", nil, &result)
+	fmt.Println(err)
 	assert.Nil(t, err)
-	assert.Equal(t, "5.3.0", result)
+	assert.Equal(t, version.GetVersion(), result.Chain33)
 
 	var isSnyc bool
 	err = jsonClient.Call("Chain33.IsSync", &types.ReqNil{}, &isSnyc)

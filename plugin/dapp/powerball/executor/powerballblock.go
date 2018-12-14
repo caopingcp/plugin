@@ -20,7 +20,7 @@ func (action *Action) getTxActions(height int64, blockNum int64) ([]*tickettypes
 	var txActions []*tickettypes.TicketAction
 	pblog.Error("getTxActions", "height", height, "blockNum", blockNum)
 	if !types.IsPara() {
-		req := &types.ReqBlocks{height - blockNum + 1, height, false, []string{""}}
+		req := &types.ReqBlocks{Start:height - blockNum + 1, End:height, IsDetail:false, Pid:[]string{""}}
 
 		blockDetails, err := action.api.GetBlocks(req)
 		if err != nil {
@@ -64,7 +64,7 @@ func (action *Action) getTxActions(height int64, blockNum int64) ([]*tickettypes
 //TransactionDetail
 func (action *Action) GetMainHeightByTxHash(txHash []byte) int64 {
 	for i := 0; i < retryNum; i++ {
-		req := &types.ReqHash{txHash}
+		req := &types.ReqHash{Hash:txHash}
 		txDetail, err := action.grpcClient.QueryTransaction(context.Background(), req)
 		if err != nil {
 			time.Sleep(time.Second)
@@ -77,7 +77,7 @@ func (action *Action) GetMainHeightByTxHash(txHash []byte) int64 {
 }
 
 func (action *Action) GetBlocksOnMain(start int64, end int64) (*types.BlockDetails, error) {
-	req := &types.ReqBlocks{start, end, false, []string{""}}
+	req := &types.ReqBlocks{Start:start, End:end, IsDetail:false, Pid:[]string{""}}
 	getBlockSucc := false
 	var reply *types.Reply
 	var err error

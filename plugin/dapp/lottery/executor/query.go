@@ -9,30 +9,35 @@ import (
 	pty "github.com/33cn/plugin/plugin/dapp/lottery/types"
 )
 
+// Query_GetLotteryNormalInfo not changed info
 func (l *Lottery) Query_GetLotteryNormalInfo(param *pty.ReqLotteryInfo) (types.Message, error) {
 	lottery, err := findLottery(l.GetStateDB(), param.GetLotteryId())
 	if err != nil {
 		return nil, err
 	}
-	return &pty.ReplyLotteryNormalInfo{lottery.CreateHeight,
-		lottery.PurBlockNum,
-		lottery.DrawBlockNum,
-		lottery.CreateAddr}, nil
+	return &pty.ReplyLotteryNormalInfo{CreateHeight: lottery.CreateHeight,
+		PurBlockNum:    lottery.PurBlockNum,
+		DrawBlockNum:   lottery.DrawBlockNum,
+		CreateAddr:     lottery.CreateAddr,
+		OpRewardRatio:  lottery.OpRewardRatio,
+		DevRewardRatio: lottery.DevRewardRatio}, nil
 }
 
+// Query_GetLotteryPurchaseAddr for current round
 func (l *Lottery) Query_GetLotteryPurchaseAddr(param *pty.ReqLotteryInfo) (types.Message, error) {
 	lottery, err := findLottery(l.GetStateDB(), param.GetLotteryId())
 	if err != nil {
 		return nil, err
 	}
 	reply := &pty.ReplyLotteryPurchaseAddr{}
-	for addr := range lottery.Records {
-		reply.Address = append(reply.Address, addr)
+	for _, recs := range lottery.PurRecords {
+		reply.Address = append(reply.Address, recs.Addr)
 	}
 	//lottery.Records
 	return reply, nil
 }
 
+// Query_GetLotteryCurrentInfo state
 func (l *Lottery) Query_GetLotteryCurrentInfo(param *pty.ReqLotteryInfo) (types.Message, error) {
 	lottery, err := findLottery(l.GetStateDB(), param.GetLotteryId())
 	if err != nil {
@@ -50,14 +55,17 @@ func (l *Lottery) Query_GetLotteryCurrentInfo(param *pty.ReqLotteryInfo) (types.
 		PurBlockNum:                lottery.PurBlockNum,
 		DrawBlockNum:               lottery.DrawBlockNum,
 		MissingRecords:             lottery.MissingRecords,
-	}
+		TotalAddrNum:               lottery.TotalAddrNum,
+		BuyAmount:                  lottery.BuyAmount}
 	return reply, nil
 }
 
+// Query_GetLotteryHistoryLuckyNumber for all history
 func (l *Lottery) Query_GetLotteryHistoryLuckyNumber(param *pty.ReqLotteryLuckyHistory) (types.Message, error) {
 	return ListLotteryLuckyHistory(l.GetLocalDB(), l.GetStateDB(), param)
 }
 
+// Query_GetLotteryRoundLuckyNumber for each round
 func (l *Lottery) Query_GetLotteryRoundLuckyNumber(param *pty.ReqLotteryLuckyInfo) (types.Message, error) {
 	//	var req pty.ReqLotteryLuckyInfo
 	var records []*pty.LotteryDrawRecord
@@ -77,10 +85,12 @@ func (l *Lottery) Query_GetLotteryRoundLuckyNumber(param *pty.ReqLotteryLuckyInf
 	return &pty.LotteryDrawRecords{Records: records}, nil
 }
 
+// Query_GetLotteryHistoryBuyInfo for all history
 func (l *Lottery) Query_GetLotteryHistoryBuyInfo(param *pty.ReqLotteryBuyHistory) (types.Message, error) {
 	return ListLotteryBuyRecords(l.GetLocalDB(), l.GetStateDB(), param)
 }
 
+// Query_GetLotteryBuyRoundInfo for each round
 func (l *Lottery) Query_GetLotteryBuyRoundInfo(param *pty.ReqLotteryBuyInfo) (types.Message, error) {
 	key := calcLotteryBuyRoundPrefix(param.LotteryId, param.Addr, param.Round)
 	record, err := l.findLotteryBuyRecords(key)

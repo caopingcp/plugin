@@ -36,7 +36,7 @@ import (
 
 var (
 	random    *rand.Rand
-	loopCount int = 10
+	loopCount = 10
 	conn      *grpc.ClientConn
 	c         types.Chain33Client
 )
@@ -76,7 +76,7 @@ func RaftPerf() {
 	time.Sleep(10 * time.Second)
 }
 
-func initEnvTendermint() (queue.Queue, *blockchain.BlockChain, queue.Module, *mempool.Mempool, queue.Module, queue.Module, queue.Module) {
+func initEnvTendermint() (queue.Queue, *blockchain.BlockChain, queue.Module, queue.Module, *executor.Executor, queue.Module, queue.Module) {
 	var q = queue.New("channel")
 	flag.Parse()
 	cfg, sub := types.InitCfg("chain33.test.toml")
@@ -93,13 +93,13 @@ func initEnvTendermint() (queue.Queue, *blockchain.BlockChain, queue.Module, *me
 	cs := New(cfg.Consensus, sub.Consensus["tendermint"])
 	cs.SetQueueClient(q.Client())
 
-	mem := mempool.New(cfg.MemPool)
+	mem := mempool.New(cfg.Mempool, nil)
 	mem.SetQueueClient(q.Client())
 	network := p2p.New(cfg.P2P)
 
 	network.SetQueueClient(q.Client())
 
-	rpc.InitCfg(cfg.Rpc)
+	rpc.InitCfg(cfg.RPC)
 	gapi := rpc.NewGRpcServer(q.Client(), nil)
 	go gapi.Listen()
 	return q, chain, s, mem, exec, cs, network
@@ -147,7 +147,7 @@ func prepareTxList() *types.Transaction {
 	key = generateKey(i, 32)
 	value = generateValue(i, 180)
 
-	nput := &pty.NormAction_Nput{&pty.NormPut{Key: key, Value: []byte(value)}}
+	nput := &pty.NormAction_Nput{Nput: &pty.NormPut{Key: []byte(key), Value: []byte(value)}}
 	action := &pty.NormAction{Value: nput, Ty: pty.NormActionPut}
 	tx := &types.Transaction{Execer: []byte("norm"), Payload: types.Encode(action), Fee: fee}
 	tx.To = address.ExecAddress("norm")
@@ -161,7 +161,7 @@ func clearTestData() {
 	if err != nil {
 		fmt.Println("delete datadir have a err:", err.Error())
 	}
-	fmt.Println("test data clear sucessfully!")
+	fmt.Println("test data clear successfully!")
 }
 
 func NormPut() {

@@ -15,6 +15,8 @@ import (
 
 	"strconv"
 
+	"encoding/json"
+
 	"github.com/33cn/chain33/common"
 	"github.com/33cn/chain33/common/address"
 	"github.com/33cn/chain33/common/crypto/sha3"
@@ -28,6 +30,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+//EvmCmd 是Evm命令行入口
 func EvmCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "evm",
@@ -36,32 +39,33 @@ func EvmCmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		CreateContractCmd(),
-		CallContractCmd(),
-		EstimateContractCmd(),
-		CheckContractAddrCmd(),
-		EvmDebugCmd(),
-		EvmTransferCmd(),
-		EvmWithdrawCmd(),
-		GetEvmBalanceCmd(),
-		EvmToolsCmd(),
+		createContractCmd(),
+		callContractCmd(),
+		abiCmd(),
+		estimateContractCmd(),
+		checkContractAddrCmd(),
+		evmDebugCmd(),
+		evmTransferCmd(),
+		evmWithdrawCmd(),
+		getEvmBalanceCmd(),
+		evmToolsCmd(),
 	)
 
 	return cmd
 }
 
 // some tools for evm op
-func EvmToolsCmd() *cobra.Command {
+func evmToolsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "tool",
 		Short: "Some tools for evm op",
 	}
-	cmd.AddCommand(EvmToolsAddressCmd())
+	cmd.AddCommand(evmToolsAddressCmd())
 	return cmd
 }
 
 // transfer address format between ethereum and chain33
-func EvmToolsAddressCmd() *cobra.Command {
+func evmToolsAddressCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "address",
 		Short: "Transfer address format between ethereum and local (you should input one address of them)",
@@ -105,7 +109,7 @@ func transferAddress(cmd *cobra.Command, args []string) {
 			addr = *addrP
 			fmt.Println(fmt.Sprintf("Local Address: %v", local))
 		}
-		fmt.Println(fmt.Sprintf("Ethereum Address: %v", ChecksumAddr(addr.Bytes())))
+		fmt.Println(fmt.Sprintf("Ethereum Address: %v", checksumAddr(addr.Bytes())))
 
 		return
 	}
@@ -113,7 +117,7 @@ func transferAddress(cmd *cobra.Command, args []string) {
 }
 
 // get balance of an execer
-func GetEvmBalanceCmd() *cobra.Command {
+func getEvmBalanceCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "balance",
 		Short: "Get balance of a evm contract address",
@@ -156,16 +160,21 @@ func evmBalance(cmd *cobra.Command, args []string) {
 		StateHash: "",
 	}
 	var res []*rpctypes.Account
-	ctx := jsonclient.NewRpcCtx(rpcLaddr, "Chain33.GetBalance", params, &res)
+	ctx := jsonclient.NewRPCCtx(rpcLaddr, "Chain33.GetBalance", params, &res)
 	ctx.SetResultCb(parseGetBalanceRes)
 	ctx.Run()
 }
 
+// AccountResult 账户余额查询出来之后进行单位转换
 type AccountResult struct {
-	Currency int32  `json:"currency,omitempty"`
-	Balance  string `json:"balance,omitempty"`
-	Frozen   string `json:"frozen,omitempty"`
-	Addr     string `json:"addr,omitempty"`
+	// 货币
+	Currency int32 `json:"currency,omitempty"`
+	// 余额
+	Balance string `json:"balance,omitempty"`
+	// 冻结余额
+	Frozen string `json:"frozen,omitempty"`
+	// 账户地址
+	Addr string `json:"addr,omitempty"`
 }
 
 func parseGetBalanceRes(arg interface{}) (interface{}, error) {
@@ -182,7 +191,7 @@ func parseGetBalanceRes(arg interface{}) (interface{}, error) {
 }
 
 // 创建EVM合约
-func CreateContractCmd() *cobra.Command {
+func createContractCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a new EVM contract",
@@ -194,8 +203,10 @@ func CreateContractCmd() *cobra.Command {
 
 func addCreateContractFlags(cmd *cobra.Command) {
 	addCommonFlags(cmd)
+	cmd.MarkFlagRequired("input")
 
 	cmd.Flags().StringP("alias", "s", "", "human readable contract alias name")
+	cmd.Flags().StringP("abi", "b", "", "bind the abi data")
 }
 
 func createContract(cmd *cobra.Command, args []string) {
@@ -207,6 +218,7 @@ func createContract(cmd *cobra.Command, args []string) {
 	fee, _ := cmd.Flags().GetFloat64("fee")
 	rpcLaddr, _ := cmd.Flags().GetString("rpc_laddr")
 	paraName, _ := cmd.Flags().GetString("paraName")
+	abi, _ := cmd.Flags().GetString("abi")
 
 	feeInt64 := uint64(fee*1e4) * 1e4
 
@@ -215,7 +227,7 @@ func createContract(cmd *cobra.Command, args []string) {
 		fmt.Fprintln(os.Stderr, "parse evm code error", err)
 		return
 	}
-	action := evmtypes.EVMContractAction{Amount: 0, Code: bCode, GasLimit: 0, GasPrice: 0, Note: note, Alias: alias}
+	action := evmtypes.EVMContractAction{Amount: 0, Code: bCode, GasLimit: 0, GasPrice: 0, Note: note, Alias: alias, Abi: abi}
 
 	data, err := createEvmTx(&action, types.ExecName(paraName+"evm"), caller, address.ExecAddress(types.ExecName(paraName+"evm")), expire, rpcLaddr, feeInt64)
 
@@ -228,7 +240,7 @@ func createContract(cmd *cobra.Command, args []string) {
 		Data: data,
 	}
 
-	ctx := jsonclient.NewRpcCtx(rpcLaddr, "Chain33.SendTransaction", params, nil)
+	ctx := jsonclient.NewRPCCtx(rpcLaddr, "Chain33.SendTransaction", params, nil)
 	ctx.RunWithoutMarshal()
 }
 
@@ -319,7 +331,7 @@ func createEvmTransferTx(cmd *cobra.Command, caller, execName, expire, rpcLaddr 
 }
 
 // 调用EVM合约
-func CallContractCmd() *cobra.Command {
+func callContractCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "call",
 		Short: "Call the EVM contract",
@@ -337,6 +349,7 @@ func callContract(cmd *cobra.Command, args []string) {
 	amount, _ := cmd.Flags().GetFloat64("amount")
 	fee, _ := cmd.Flags().GetFloat64("fee")
 	name, _ := cmd.Flags().GetString("exec")
+	abi, _ := cmd.Flags().GetString("abi")
 	rpcLaddr, _ := cmd.Flags().GetString("rpc_laddr")
 
 	amountInt64 := uint64(amount*1e4) * 1e4
@@ -349,7 +362,7 @@ func callContract(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	action := evmtypes.EVMContractAction{Amount: amountInt64, Code: bCode, GasLimit: 0, GasPrice: 0, Note: note}
+	action := evmtypes.EVMContractAction{Amount: amountInt64, Code: bCode, GasLimit: 0, GasPrice: 0, Note: note, Abi: abi}
 
 	//name表示发给哪个执行器
 	data, err := createEvmTx(&action, name, caller, toAddr, expire, rpcLaddr, feeInt64)
@@ -363,7 +376,7 @@ func callContract(cmd *cobra.Command, args []string) {
 		Data: data,
 	}
 
-	ctx := jsonclient.NewRpcCtx(rpcLaddr, "Chain33.SendTransaction", params, nil)
+	ctx := jsonclient.NewRPCCtx(rpcLaddr, "Chain33.SendTransaction", params, nil)
 	ctx.RunWithoutMarshal()
 }
 
@@ -373,11 +386,12 @@ func addCallContractFlags(cmd *cobra.Command) {
 	cmd.MarkFlagRequired("exec")
 
 	cmd.Flags().Float64P("amount", "a", 0, "the amount transfer to the contract (optional)")
+
+	cmd.Flags().StringP("abi", "b", "", "call with abi")
 }
 
 func addCommonFlags(cmd *cobra.Command) {
 	cmd.Flags().StringP("input", "i", "", "input contract binary code")
-	cmd.MarkFlagRequired("input")
 
 	cmd.Flags().StringP("caller", "c", "", "the caller address")
 	cmd.MarkFlagRequired("caller")
@@ -387,6 +401,85 @@ func addCommonFlags(cmd *cobra.Command) {
 	cmd.Flags().StringP("note", "n", "", "transaction note info (optional)")
 
 	cmd.Flags().Float64P("fee", "f", 0, "contract gas fee (optional)")
+}
+
+// abi命令
+func abiCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "abi",
+		Short: "EVM ABI commands",
+		Args:  cobra.MinimumNArgs(1),
+	}
+
+	cmd.AddCommand(
+		getAbiCmd(),
+		callAbiCmd(),
+	)
+	return cmd
+}
+
+func getAbiCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "get",
+		Short: "get abi data of evm contract",
+		Run:   getAbi,
+	}
+
+	cmd.Flags().StringP("address", "a", "", "evm contract address")
+	cmd.MarkFlagRequired("address")
+
+	return cmd
+}
+
+func getAbi(cmd *cobra.Command, args []string) {
+	addr, _ := cmd.Flags().GetString("address")
+
+	var req = evmtypes.EvmQueryAbiReq{Address: addr}
+	var resp evmtypes.EvmQueryAbiResp
+	rpcLaddr, _ := cmd.Flags().GetString("rpc_laddr")
+	query := sendQuery(rpcLaddr, "QueryABI", &req, &resp)
+
+	if query {
+		fmt.Fprintln(os.Stdout, resp.Abi)
+	}
+}
+
+func callAbiCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "call",
+		Short: "send query call by abi format",
+		Run:   callAbi,
+	}
+
+	cmd.Flags().StringP("address", "a", "", "evm contract address")
+	cmd.MarkFlagRequired("address")
+
+	cmd.Flags().StringP("input", "b", "", "call params (abi format) like foobar(param1,param2)")
+	cmd.MarkFlagRequired("input")
+
+	cmd.Flags().StringP("caller", "c", "", "the caller address")
+
+	return cmd
+}
+
+func callAbi(cmd *cobra.Command, args []string) {
+	addr, _ := cmd.Flags().GetString("address")
+	input, _ := cmd.Flags().GetString("input")
+	caller, _ := cmd.Flags().GetString("caller")
+
+	var req = evmtypes.EvmQueryReq{Address: addr, Input: input, Caller: caller}
+	var resp evmtypes.EvmQueryResp
+	rpcLaddr, _ := cmd.Flags().GetString("rpc_laddr")
+	query := sendQuery(rpcLaddr, "Query", &req, &resp)
+
+	if query {
+		data, err := json.MarshalIndent(&resp, "", "  ")
+		if err != nil {
+			fmt.Println(resp.String())
+		} else {
+			fmt.Println(string(data))
+		}
+	}
 }
 
 func estimateContract(cmd *cobra.Command, args []string) {
@@ -410,7 +503,7 @@ func estimateContract(cmd *cobra.Command, args []string) {
 	var estGasReq = evmtypes.EstimateEVMGasReq{To: toAddr, Code: bCode, Caller: caller, Amount: amountInt64}
 	var estGasResp evmtypes.EstimateEVMGasResp
 	rpcLaddr, _ := cmd.Flags().GetString("rpc_laddr")
-	query := sendQuery(rpcLaddr, "EstimateGas", estGasReq, &estGasResp)
+	query := sendQuery(rpcLaddr, "EstimateGas", &estGasReq, &estGasResp)
 
 	if query {
 		fmt.Fprintf(os.Stdout, "gas cost estimate %v\n", estGasResp.Gas)
@@ -431,7 +524,7 @@ func addEstimateFlags(cmd *cobra.Command) {
 }
 
 // 估算合约消耗
-func EstimateContractCmd() *cobra.Command {
+func estimateContractCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "estimate",
 		Short: "Estimate the gas cost of calling or creating a contract",
@@ -442,7 +535,7 @@ func EstimateContractCmd() *cobra.Command {
 }
 
 // 检查地址是否为EVM合约
-func CheckContractAddrCmd() *cobra.Command {
+func checkContractAddrCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "check",
 		Short: "Check if the address is a valid EVM contract",
@@ -475,7 +568,7 @@ func checkContractAddr(cmd *cobra.Command, args []string) {
 	var checkAddrReq = evmtypes.CheckEVMAddrReq{Addr: toAddr}
 	var checkAddrResp evmtypes.CheckEVMAddrResp
 	rpcLaddr, _ := cmd.Flags().GetString("rpc_laddr")
-	query := sendQuery(rpcLaddr, "CheckAddrExists", checkAddrReq, &checkAddrResp)
+	query := sendQuery(rpcLaddr, "CheckAddrExists", &checkAddrReq, &checkAddrResp)
 
 	if query && checkAddrResp.Contract {
 		proto.MarshalText(os.Stdout, &checkAddrResp)
@@ -485,34 +578,34 @@ func checkContractAddr(cmd *cobra.Command, args []string) {
 }
 
 // 查询或设置EVM调试开关
-func EvmDebugCmd() *cobra.Command {
+func evmDebugCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "debug",
 		Short: "Query or set evm debug status",
 	}
 	cmd.AddCommand(
-		EvmDebugQueryCmd(),
-		EvmDebugSetCmd(),
-		EvmDebugClearCmd())
+		evmDebugQueryCmd(),
+		evmDebugSetCmd(),
+		evmDebugClearCmd())
 
 	return cmd
 }
 
-func EvmDebugQueryCmd() *cobra.Command {
+func evmDebugQueryCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "query",
 		Short: "Query evm debug status",
 		Run:   evmDebugQuery,
 	}
 }
-func EvmDebugSetCmd() *cobra.Command {
+func evmDebugSetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "set",
 		Short: "Set evm debug to ON",
 		Run:   evmDebugSet,
 	}
 }
-func EvmDebugClearCmd() *cobra.Command {
+func evmDebugClearCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "clear",
 		Short: "Set evm debug to OFF",
@@ -521,21 +614,21 @@ func EvmDebugClearCmd() *cobra.Command {
 }
 
 func evmDebugQuery(cmd *cobra.Command, args []string) {
-	evmDebugRpc(cmd, 0)
+	evmDebugRPC(cmd, 0)
 }
 
 func evmDebugSet(cmd *cobra.Command, args []string) {
-	evmDebugRpc(cmd, 1)
+	evmDebugRPC(cmd, 1)
 }
 
 func evmDebugClear(cmd *cobra.Command, args []string) {
-	evmDebugRpc(cmd, -1)
+	evmDebugRPC(cmd, -1)
 }
-func evmDebugRpc(cmd *cobra.Command, flag int32) {
+func evmDebugRPC(cmd *cobra.Command, flag int32) {
 	var debugReq = evmtypes.EvmDebugReq{Optype: flag}
 	var debugResp evmtypes.EvmDebugResp
 	rpcLaddr, _ := cmd.Flags().GetString("rpc_laddr")
-	query := sendQuery(rpcLaddr, "EvmDebug", debugReq, &debugResp)
+	query := sendQuery(rpcLaddr, "EvmDebug", &debugReq, &debugResp)
 
 	if query {
 		proto.MarshalText(os.Stdout, &debugResp)
@@ -545,7 +638,7 @@ func evmDebugRpc(cmd *cobra.Command, flag int32) {
 }
 
 // 向EVM合约地址转账
-func EvmTransferCmd() *cobra.Command {
+func evmTransferCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "transfer",
 		Short: "Transfer to evm contract address",
@@ -588,12 +681,12 @@ func evmTransfer(cmd *cobra.Command, args []string) {
 		Data: data,
 	}
 
-	ctx := jsonclient.NewRpcCtx(rpcLaddr, "Chain33.SendTransaction", params, nil)
+	ctx := jsonclient.NewRPCCtx(rpcLaddr, "Chain33.SendTransaction", params, nil)
 	ctx.RunWithoutMarshal()
 }
 
 // 向EVM合约地址转账
-func EvmWithdrawCmd() *cobra.Command {
+func evmWithdrawCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "withdraw",
 		Short: "Withdraw from evm contract address to caller's balance",
@@ -636,15 +729,15 @@ func evmWithdraw(cmd *cobra.Command, args []string) {
 		Data: data,
 	}
 
-	ctx := jsonclient.NewRpcCtx(rpcLaddr, "Chain33.SendTransaction", params, nil)
+	ctx := jsonclient.NewRPCCtx(rpcLaddr, "Chain33.SendTransaction", params, nil)
 	ctx.RunWithoutMarshal()
 }
 
-func sendQuery(rpcAddr, funcName string, request interface{}, result proto.Message) bool {
-	params := types.Query4Cli{
+func sendQuery(rpcAddr, funcName string, request types.Message, result proto.Message) bool {
+	params := rpctypes.Query4Jrpc{
 		Execer:   "evm",
 		FuncName: funcName,
-		Payload:  request,
+		Payload:  types.MustPBToJSON(request),
 	}
 
 	jsonrpc, err := jsonclient.NewJSONClient(rpcAddr)
@@ -662,7 +755,7 @@ func sendQuery(rpcAddr, funcName string, request interface{}, result proto.Messa
 }
 
 // 这里实现 EIP55中提及的以太坊地址表示方式（增加Checksum）
-func ChecksumAddr(address []byte) string {
+func checksumAddr(address []byte) string {
 	unchecksummed := hex.EncodeToString(address[:])
 	sha := sha3.NewKeccak256()
 	sha.Write([]byte(unchecksummed))

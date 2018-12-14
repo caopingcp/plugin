@@ -14,12 +14,12 @@ import (
 	"github.com/33cn/chain33/types"
 )
 
-//blockchain模块的消息接收处理
+//ProcRecvMsg blockchain模块的消息接收处理
 func (chain *BlockChain) ProcRecvMsg() {
 	defer chain.recvwg.Done()
 	reqnum := make(chan struct{}, 1000)
 	for msg := range chain.client.Recv() {
-		chainlog.Debug("blockchain recv", "msg", types.GetEventName(int(msg.Ty)), "id", msg.Id, "cap", len(reqnum))
+		chainlog.Debug("blockchain recv", "msg", types.GetEventName(int(msg.Ty)), "id", msg.ID, "cap", len(reqnum))
 		msgtype := msg.Ty
 		reqnum <- struct{}{}
 		atomic.AddInt32(&chain.runcount, 1)
@@ -83,6 +83,14 @@ func (chain *BlockChain) ProcRecvMsg() {
 			go chain.processMsg(msg, reqnum, chain.getSeqByHash)
 		case types.EventLocalPrefixCount:
 			go chain.processMsg(msg, reqnum, chain.localPrefixCount)
+		case types.EventAddBlockSeqCB:
+			go chain.processMsg(msg, reqnum, chain.addBlockSeqCB)
+
+		case types.EventListBlockSeqCB:
+			go chain.processMsg(msg, reqnum, chain.listBlockSeqCB)
+
+		case types.EventGetSeqCBLastNum:
+			go chain.processMsg(msg, reqnum, chain.getSeqCBLastNum)
 		default:
 			go chain.processMsg(msg, reqnum, chain.unknowMsg)
 		}
@@ -91,6 +99,39 @@ func (chain *BlockChain) ProcRecvMsg() {
 
 func (chain *BlockChain) unknowMsg(msg queue.Message) {
 	chainlog.Warn("ProcRecvMsg unknow msg", "msgtype", msg.Ty)
+}
+
+func (chain *BlockChain) addBlockSeqCB(msg queue.Message) {
+	reply := &types.Reply{
+		IsOk: true,
+	}
+	cb := (msg.Data).(*types.BlockSeqCB)
+	err := chain.ProcAddBlockSeqCB(cb)
+	if err != nil {
+		reply.IsOk = false
+		reply.Msg = []byte(err.Error())
+		msg.Reply(chain.client.NewMessage("rpc", types.EventAddBlockSeqCB, reply))
+		return
+	}
+	chain.pushseq.addTask(cb)
+	msg.Reply(chain.client.NewMessage("rpc", types.EventAddBlockSeqCB, reply))
+}
+
+func (chain *BlockChain) listBlockSeqCB(msg queue.Message) {
+	cbs, err := chain.ProcListBlockSeqCB()
+	if err != nil {
+		chainlog.Error("listBlockSeqCB", "err", err.Error())
+		msg.Reply(chain.client.NewMessage("rpc", types.EventListBlockSeqCB, err))
+		return
+	}
+	msg.Reply(chain.client.NewMessage("rpc", types.EventListBlockSeqCB, cbs))
+}
+func (chain *BlockChain) getSeqCBLastNum(msg queue.Message) {
+	data := (msg.Data).(*types.ReqString)
+
+	num := chain.ProcGetSeqCBLastNum(data.Data)
+	lastNum := &types.Int64{Data: num}
+	msg.Reply(chain.client.NewMessage("rpc", types.EventGetSeqCBLastNum, lastNum))
 }
 
 func (chain *BlockChain) queryTx(msg queue.Message) {
@@ -167,7 +208,7 @@ func (chain *BlockChain) getHeaders(msg queue.Message) {
 
 func (chain *BlockChain) isSync(msg queue.Message) {
 	ok := chain.IsCaughtUp()
-	msg.Reply(chain.client.NewMessage("", types.EventReplyIsSync, &types.IsCaughtUp{ok}))
+	msg.Reply(chain.client.NewMessage("", types.EventReplyIsSync, &types.IsCaughtUp{Iscaughtup: ok}))
 }
 
 func (chain *BlockChain) getLastHeader(msg queue.Message) {
@@ -332,7 +373,7 @@ func (chain *BlockChain) getLastBlock(msg queue.Message) {
 
 func (chain *BlockChain) isNtpClockSync(msg queue.Message) {
 	ok := GetNtpClockSyncStatus()
-	msg.Reply(chain.client.NewMessage("", types.EventReplyIsNtpClockSync, &types.IsNtpClockSync{ok}))
+	msg.Reply(chain.client.NewMessage("", types.EventReplyIsNtpClockSync, &types.IsNtpClockSync{Isntpclocksync: ok}))
 }
 
 type funcProcess func(msg queue.Message)
@@ -414,11 +455,13 @@ func (chain *BlockChain) addParaChainBlockDetail(msg queue.Message) {
 
 //parachian 通过blockhash获取对应的seq，只记录了addblock时的seq
 func (chain *BlockChain) getSeqByHash(msg queue.Message) {
-	var sequence types.Int64
-
 	blockhash := (msg.Data).(*types.ReqHash)
-	sequence.Data, _ = chain.ProcGetSeqByHash(blockhash.Hash)
-	msg.Reply(chain.client.NewMessage("rpc", types.EventGetSeqByHash, &sequence))
+	seq, err := chain.ProcGetSeqByHash(blockhash.Hash)
+	if err != nil {
+		chainlog.Error("getSeqByHash", "err", err.Error())
+		msg.Reply(chain.client.NewMessage("rpc", types.EventReply, err))
+	}
+	msg.Reply(chain.client.NewMessage("rpc", types.EventGetSeqByHash, &types.Int64{Data: seq}))
 }
 
 //获取指定前缀key的数量

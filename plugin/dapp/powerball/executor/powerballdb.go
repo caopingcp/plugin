@@ -117,7 +117,7 @@ func NewPowerballDB(powerballId string, purTime string, drawTime string, ticketP
 // GetKVSet method
 func (ball *PowerballDB) GetKVSet() (kvset []*types.KeyValue) {
 	value := types.Encode(&ball.Powerball)
-	kvset = append(kvset, &types.KeyValue{Key(ball.PowerballId), value})
+	kvset = append(kvset, &types.KeyValue{Key:Key(ball.PowerballId), Value:value})
 	return kvset
 }
 
@@ -165,7 +165,7 @@ func NewPowerballAction(l *Powerball, tx *types.Transaction, index int) *Action 
 	grpcClient := types.NewChain33Client(conn)
 
 	return &Action{l.GetCoinsAccount(), l.GetStateDB(), hash, fromaddr, l.GetBlockTime(),
-		l.GetHeight(), dapp.ExecAddress(string(tx.Execer)), l.GetDifficulty(), l.GetApi(), conn, grpcClient, index}
+		l.GetHeight(), dapp.ExecAddress(string(tx.Execer)), l.GetDifficulty(), l.GetAPI(), conn, grpcClient, index}
 }
 
 func (action *Action) GetReceiptLog(powerball *pty.Powerball, preStatus int32, logTy int32,
@@ -244,7 +244,7 @@ func (action *Action) PowerballCreate(create *pty.PowerballCreate) (*types.Recei
 	receiptLog := action.GetReceiptLog(&ball.Powerball, pty.PowerballNil, pty.TyLogPowerballCreate, 0, nil, 0, nil, nil)
 	logs = append(logs, receiptLog)
 
-	receipt = &types.Receipt{types.ExecOk, kv, logs}
+	receipt = &types.Receipt{Ty:types.ExecOk, KV:kv, Logs:logs}
 	return receipt, nil
 }
 
@@ -380,7 +380,7 @@ func (action *Action) PowerballBuy(buy *pty.PowerballBuy) (*types.Receipt, error
 	receiptLog := action.GetReceiptLog(&ball.Powerball, preStatus, pty.TyLogPowerballBuy, ball.Round, buy.GetNumber(), buy.GetAmount(), nil, nil)
 	logs = append(logs, receiptLog)
 
-	receipt = &types.Receipt{types.ExecOk, kv, logs}
+	receipt = &types.Receipt{Ty:types.ExecOk, KV:kv, Logs:logs}
 	return receipt, nil
 }
 
@@ -432,7 +432,7 @@ func (action *Action) PowerballPause(pause *pty.PowerballPause) (*types.Receipt,
 	receiptLog := action.GetReceiptLog(&ball.Powerball, preStatus, pty.TyLogPowerballPause, 0, nil, 0, nil, nil)
 	logs = append(logs, receiptLog)
 
-	return &types.Receipt{types.ExecOk, kv, logs}, nil
+	return &types.Receipt{Ty:types.ExecOk, KV:kv, Logs:logs}, nil
 }
 
 // PowerballDraw draw powerball
@@ -472,7 +472,7 @@ func (action *Action) PowerballDraw(draw *pty.PowerballDraw) (*types.Receipt, er
 	receiptLog := action.GetReceiptLog(&ball.Powerball, preStatus, pty.TyLogPowerballDraw, ball.Round, nil, 0, ball.LuckyNumber, updateInfo)
 	logs = append(logs, receiptLog)
 
-	receipt = &types.Receipt{types.ExecOk, kv, logs}
+	receipt = &types.Receipt{Ty:types.ExecOk, KV:kv, Logs:logs}
 	return receipt, nil
 }
 
@@ -537,7 +537,7 @@ func (action *Action) PowerballClose(draw *pty.PowerballClose) (*types.Receipt, 
 	receiptLog := action.GetReceiptLog(&ball.Powerball, preStatus, pty.TyLogPowerballClose, 0, nil, 0, nil, nil)
 	logs = append(logs, receiptLog)
 
-	return &types.Receipt{types.ExecOk, kv, logs}, nil
+	return &types.Receipt{Ty:types.ExecOk, KV:kv, Logs:logs}, nil
 }
 
 func (action *Action) GetModify(beg, end int64, randMolNum int64) ([]byte, error) {
@@ -545,7 +545,7 @@ func (action *Action) GetModify(beg, end int64, randMolNum int64) ([]byte, error
 	total := int64(0)
 	newmodify := ""
 	for i := beg; i < end; i += randMolNum {
-		req := &types.ReqBlocks{i, i, false, []string{""}}
+		req := &types.ReqBlocks{Start:i, End:i, IsDetail:false, Pid:[]string{""}}
 		blocks, err := action.api.GetBlocks(req)
 		if err != nil {
 			return []byte{}, err
@@ -796,7 +796,7 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 		ball.LastTransToDrawStateOnMain = mainHeight
 	}
 
-	return &types.Receipt{types.ExecOk, kv, logs}, &updateInfo, nil
+	return &types.Receipt{Ty:types.ExecOk, KV:kv, Logs:logs}, &updateInfo, nil
 }
 
 func (action *Action) recordMissing(ball *PowerballDB) {

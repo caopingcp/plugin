@@ -42,13 +42,13 @@ func init() {
 type suiteParaCommitMsg struct {
 	// Include our basic suite logic.
 	suite.Suite
-	para    *ParaClient
+	para    *client
 	grpcCli *typesmocks.Chain33Client
 	q       queue.Queue
 	block   *blockchain.BlockChain
 	exec    *executor.Executor
 	store   queue.Module
-	mem     *mempool.Mempool
+	mem     queue.Module
 	network *p2p.P2p
 }
 
@@ -70,7 +70,7 @@ func (s *suiteParaCommitMsg) initEnv(cfg *types.Config, sub *types.ConfigSubModu
 
 	s.store = store.New(cfg.Store, sub.Store)
 	s.store.SetQueueClient(q.Client())
-	s.para = New(cfg.Consensus, sub.Consensus["para"]).(*ParaClient)
+	s.para = New(cfg.Consensus, sub.Consensus["para"]).(*client)
 	s.grpcCli = &typesmocks.Chain33Client{}
 	//data := &types.Int64{1}
 	s.grpcCli.On("GetLastBlockSequence", mock.Anything, mock.Anything).Return(nil, errors.New("nil"))
@@ -84,20 +84,18 @@ func (s *suiteParaCommitMsg) initEnv(cfg *types.Config, sub *types.ConfigSubModu
 	s.para.grpcClient = s.grpcCli
 	s.para.SetQueueClient(q.Client())
 
-	s.mem = mempool.New(cfg.MemPool)
+	s.mem = mempool.New(cfg.Mempool, nil)
 	s.mem.SetQueueClient(q.Client())
-	s.mem.SetSync(true)
-	s.mem.WaitPollLastHeader()
+	s.mem.Wait()
 
 	s.network = p2p.New(cfg.P2P)
 	s.network.SetQueueClient(q.Client())
 
 	s.para.wg.Add(1)
 	go walletProcess(q, s.para)
-
 }
 
-func walletProcess(q queue.Queue, para *ParaClient) {
+func walletProcess(q queue.Queue, para *client) {
 	defer para.wg.Done()
 
 	client := q.Client()
@@ -109,7 +107,7 @@ func walletProcess(q queue.Queue, para *ParaClient) {
 			return
 		case msg := <-client.Recv():
 			if msg.Ty == types.EventDumpPrivkey {
-				msg.Reply(client.NewMessage("", types.EventHeader, &types.ReplyString{"6da92a632ab7deb67d38c0f6560bcfed28167998f6496db64c258d5e8393a81b"}))
+				msg.Reply(client.NewMessage("", types.EventHeader, &types.ReplyString{Data: "6da92a632ab7deb67d38c0f6560bcfed28167998f6496db64c258d5e8393a81b"}))
 			}
 		}
 	}

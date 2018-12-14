@@ -39,6 +39,7 @@ enableTxQuickIndex=false
 
 
 [p2p]
+port=13802
 seeds=["47.104.125.151:13802","47.104.125.97:13802","47.104.125.177:13802"]
 enable=true
 isSeed=true
@@ -58,11 +59,28 @@ grpcBindAddr="localhost:8802"
 whitelist=["127.0.0.1"]
 jrpcFuncWhitelist=["*"]
 grpcFuncWhitelist=["*"]
+enableTLS=false
+certFile="cert.pem"
+keyFile="key.pem"
 
 [mempool]
+name="timeline"
 poolCacheSize=10240
-minTxFee=1000000
+minTxFee=100000
 maxTxNumPerAccount=10000
+
+[mempool.sub.timeline]
+poolCacheSize=10240
+minTxFee=100000
+maxTxNumPerAccount=10000
+
+[mempool.sub.trade]
+poolCacheSize=10240
+minTxFee=100000
+maxTxNumPerAccount=10000
+timeParam=1      #时间占价格比例
+priceConstant=1  #一个合适的常量
+pricePower=0     #手续费占常量比例
 
 [consensus]
 name="solo"
@@ -146,6 +164,14 @@ enableMVCC=false
 
 [exec.sub.token]
 saveTokenTxList=true
+tokenApprs = [
+	"1Bsg9j6gW83sShoee1fZAt9TkUjcrCgA9S",
+	"1Q8hGLfoGe63efeWa8fJ4Pnukhkngt6poK",
+	"1LY8GFia5EiyoTodMLfkB5PHNNpXRqxhyB",
+	"1GCzJDS6HbgTQ2emade7mEJGGWFfA15pS9",
+	"1JYB8sxi4He5pZWHCd3Zi2nypQ4JMB6AxN",
+	"12qyocayNF7Lv6C9qW4avxs2E7U41fKSfv",
+]
 
 [exec.sub.relay]
 genesis="14KEKbYtKKQm4wMthSK9J4La4nAiidGozt"
@@ -157,3 +183,10 @@ enable=false
 cryptoPath="authdir/crypto"
 # 带证书签名类型，支持"auth_ecdsa", "auth_sm2"
 signType="auth_ecdsa"
+
+[exec.sub.manage]
+superManager=[
+    "1Bsg9j6gW83sShoee1fZAt9TkUjcrCgA9S",
+    "12qyocayNF7Lv6C9qW4avxs2E7U41fKSfv",
+    "1Q8hGLfoGe63efeWa8fJ4Pnukhkngt6poK"
+]

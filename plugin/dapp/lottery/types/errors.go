@@ -6,6 +6,7 @@ package types
 
 import "errors"
 
+// Errors for lottery
 var (
 	ErrNoPrivilege              = errors.New("ErrNoPrivilege")
 	ErrLotteryStatus            = errors.New("ErrLotteryStatus")
@@ -24,4 +25,5 @@ var (
 	ErrLotteryErrUnableClose    = errors.New("ErrLotteryErrUnableClose")
 	ErrNodeNotExist             = errors.New("ErrNodeNotExist")
 	ErrEmptyMinerTx             = errors.New("ErrEmptyMinerTx")
+	ErrRewardFactor             = errors.New("ErrRewardFactor")
 )

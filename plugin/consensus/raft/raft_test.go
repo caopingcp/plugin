@@ -34,8 +34,8 @@ import (
 
 var (
 	random    *rand.Rand
-	txNumber  int = 10
-	loopCount int = 10
+	txNumber  = 10
+	loopCount = 10
 )
 
 func init() {
@@ -63,7 +63,7 @@ func RaftPerf() {
 	sendReplyList(q)
 }
 
-func initEnvRaft() (queue.Queue, *blockchain.BlockChain, queue.Module, *mempool.Mempool, queue.Module, queue.Module, queue.Module) {
+func initEnvRaft() (queue.Queue, *blockchain.BlockChain, queue.Module, queue.Module, *executor.Executor, queue.Module, queue.Module) {
 	var q = queue.New("channel")
 	flag.Parse()
 	cfg, sub := types.InitCfg("chain33.test.toml")
@@ -80,7 +80,7 @@ func initEnvRaft() (queue.Queue, *blockchain.BlockChain, queue.Module, *mempool.
 	cs := NewRaftCluster(cfg.Consensus, sub.Consensus["raft"])
 	cs.SetQueueClient(q.Client())
 
-	mem := mempool.New(cfg.MemPool)
+	mem := mempool.New(cfg.Mempool, nil)
 	mem.SetQueueClient(q.Client())
 	network := p2p.New(cfg.P2P)
 
@@ -132,7 +132,7 @@ func sendReplyList(q queue.Queue) {
 		if msg.Ty == types.EventTxList {
 			count++
 			msg.Reply(client.NewMessage("consensus", types.EventReplyTxList,
-				&types.ReplyTxList{getReplyList(txNumber)}))
+				&types.ReplyTxList{Txs: getReplyList(txNumber)}))
 			if count >= loopCount {
 				time.Sleep(4 * time.Second)
 				break
@@ -149,7 +149,7 @@ func prepareTxList() *types.Transaction {
 	key = generateKey(i, 32)
 	value = generateValue(i, 180)
 
-	nput := &pty.NormAction_Nput{&pty.NormPut{Key: key, Value: []byte(value)}}
+	nput := &pty.NormAction_Nput{Nput: &pty.NormPut{Key: []byte(key), Value: []byte(value)}}
 	action := &pty.NormAction{Value: nput, Ty: pty.NormActionPut}
 	tx := &types.Transaction{Execer: []byte("norm"), Payload: types.Encode(action), Fee: 0}
 	tx.To = address.ExecAddress("norm")
@@ -175,5 +175,5 @@ func clearTestData() {
 	if err != nil {
 		fmt.Println("delete chain33_raft dir have a err:", err.Error())
 	}
-	fmt.Println("test data clear sucessfully!")
+	fmt.Println("test data clear successfully!")
 }

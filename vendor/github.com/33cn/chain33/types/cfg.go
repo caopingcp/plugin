@@ -4,16 +4,18 @@
 
 package types
 
+// Config 配置信息
 type Config struct {
 	Title      string      `protobuf:"bytes,1,opt,name=title" json:"title,omitempty"`
+	Version    string      `protobuf:"bytes,1,opt,name=version" json:"version,omitempty"`
 	Log        *Log        `protobuf:"bytes,2,opt,name=log" json:"log,omitempty"`
 	Store      *Store      `protobuf:"bytes,3,opt,name=store" json:"store,omitempty"`
 	Consensus  *Consensus  `protobuf:"bytes,5,opt,name=consensus" json:"consensus,omitempty"`
-	MemPool    *MemPool    `protobuf:"bytes,6,opt,name=memPool" json:"memPool,omitempty"`
+	Mempool    *Mempool    `protobuf:"bytes,6,opt,name=mempool" json:"memPool,omitempty"`
 	BlockChain *BlockChain `protobuf:"bytes,7,opt,name=blockChain" json:"blockChain,omitempty"`
 	Wallet     *Wallet     `protobuf:"bytes,8,opt,name=wallet" json:"wallet,omitempty"`
 	P2P        *P2P        `protobuf:"bytes,9,opt,name=p2p" json:"p2p,omitempty"`
-	Rpc        *Rpc        `protobuf:"bytes,10,opt,name=rpc" json:"rpc,omitempty"`
+	RPC        *RPC        `protobuf:"bytes,10,opt,name=rpc" json:"rpc,omitempty"`
 	Exec       *Exec       `protobuf:"bytes,11,opt,name=exec" json:"exec,omitempty"`
 	TestNet    bool        `protobuf:"varint,12,opt,name=testNet" json:"testNet,omitempty"`
 	FixTime    bool        `protobuf:"varint,13,opt,name=fixTime" json:"fixTime,omitempty"`
@@ -21,11 +23,13 @@ type Config struct {
 	Fork       *ForkList   `protobuf:"bytes,15,opt,name=fork" json:"fork,omitempty"`
 }
 
+// ForkList fork列表配置
 type ForkList struct {
 	System map[string]int64            `protobuf:"bytes,1,rep,name=system" json:"system,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	Sub    map[string]map[string]int64 `protobuf:"bytes,2,rep,name=sub" json:"sub,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 }
 
+// Log 日志配置
 type Log struct {
 	// 日志级别，支持debug(dbug)/info/warn/error(eror)/crit
 	Loglevel        string `protobuf:"bytes,1,opt,name=loglevel" json:"loglevel,omitempty"`
@@ -48,28 +52,34 @@ type Log struct {
 	CallerFunction bool `protobuf:"varint,10,opt,name=callerFunction" json:"callerFunction,omitempty"`
 }
 
-type MemPool struct {
-	PoolCacheSize      int64 `protobuf:"varint,1,opt,name=poolCacheSize" json:"poolCacheSize,omitempty"`
-	MinTxFee           int64 `protobuf:"varint,2,opt,name=minTxFee" json:"minTxFee,omitempty"`
-	ForceAccept        bool  `protobuf:"varint,3,opt,name=forceAccept" json:"forceAccept,omitempty"`
-	MaxTxNumPerAccount int64 `protobuf:"varint,4,opt,name=maxTxNumPerAccount" json:"maxTxNumPerAccount,omitempty"`
+// Mempool 配置
+type Mempool struct {
+	Name               string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	PoolCacheSize      int64  `protobuf:"varint,1,opt,name=poolCacheSize" json:"poolCacheSize,omitempty"`
+	MinTxFee           int64  `protobuf:"varint,2,opt,name=minTxFee" json:"minTxFee,omitempty"`
+	ForceAccept        bool   `protobuf:"varint,3,opt,name=forceAccept" json:"forceAccept,omitempty"`
+	MaxTxNumPerAccount int64  `protobuf:"varint,4,opt,name=maxTxNumPerAccount" json:"maxTxNumPerAccount,omitempty"`
+	MaxTxLast          int64  `protobuf:"varint,4,opt,name=maxTxLast" json:"maxTxLast,omitempty"`
 }
 
+// Consensus 配置
 type Consensus struct {
-	Name                 string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
-	GenesisBlockTime     int64  `protobuf:"varint,2,opt,name=genesisBlockTime" json:"genesisBlockTime,omitempty"`
-	Minerstart           bool   `protobuf:"varint,3,opt,name=minerstart" json:"minerstart,omitempty"`
-	Genesis              string `protobuf:"bytes,4,opt,name=genesis" json:"genesis,omitempty"`
-	HotkeyAddr           string `protobuf:"bytes,5,opt,name=hotkeyAddr" json:"hotkeyAddr,omitempty"`
-	ForceMining          bool   `protobuf:"varint,6,opt,name=forceMining" json:"forceMining,omitempty"`
-	WriteBlockSeconds    int64  `protobuf:"varint,20,opt,name=writeBlockSeconds" json:"writeBlockSeconds,omitempty"`
-	ParaRemoteGrpcClient string `protobuf:"bytes,22,opt,name=paraRemoteGrpcClient" json:"paraRemoteGrpcClient,omitempty"`
-	StartHeight          int64  `protobuf:"varint,23,opt,name=startHeight" json:"startHeight,omitempty"`
-	EmptyBlockInterval   int64  `protobuf:"varint,24,opt,name=emptyBlockInterval" json:"emptyBlockInterval,omitempty"`
-	AuthAccount          string `protobuf:"bytes,25,opt,name=authAccount" json:"authAccount,omitempty"`
-	WaitBlocks4CommitMsg int32  `protobuf:"varint,26,opt,name=waitBlocks4CommitMsg" json:"waitBlocks4CommitMsg,omitempty"`
+	Name                        string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	GenesisBlockTime            int64  `protobuf:"varint,2,opt,name=genesisBlockTime" json:"genesisBlockTime,omitempty"`
+	Minerstart                  bool   `protobuf:"varint,3,opt,name=minerstart" json:"minerstart,omitempty"`
+	Genesis                     string `protobuf:"bytes,4,opt,name=genesis" json:"genesis,omitempty"`
+	HotkeyAddr                  string `protobuf:"bytes,5,opt,name=hotkeyAddr" json:"hotkeyAddr,omitempty"`
+	ForceMining                 bool   `protobuf:"varint,6,opt,name=forceMining" json:"forceMining,omitempty"`
+	WriteBlockSeconds           int64  `protobuf:"varint,20,opt,name=writeBlockSeconds" json:"writeBlockSeconds,omitempty"`
+	ParaRemoteGrpcClient        string `protobuf:"bytes,22,opt,name=paraRemoteGrpcClient" json:"paraRemoteGrpcClient,omitempty"`
+	StartHeight                 int64  `protobuf:"varint,23,opt,name=startHeight" json:"startHeight,omitempty"`
+	EmptyBlockInterval          int64  `protobuf:"varint,24,opt,name=emptyBlockInterval" json:"emptyBlockInterval,omitempty"`
+	AuthAccount                 string `protobuf:"bytes,25,opt,name=authAccount" json:"authAccount,omitempty"`
+	WaitBlocks4CommitMsg        int32  `protobuf:"varint,26,opt,name=waitBlocks4CommitMsg" json:"waitBlocks4CommitMsg,omitempty"`
+	SearchHashMatchedBlockDepth int32  `protobuf:"varint,27,opt,name=searchHashMatchedBlockDepth" json:"searchHashMatchedBlockDepth,omitempty"`
 }
 
+// Wallet 配置
 type Wallet struct {
 	MinFee   int64  `protobuf:"varint,1,opt,name=minFee" json:"minFee,omitempty"`
 	Driver   string `protobuf:"bytes,2,opt,name=driver" json:"driver,omitempty"`
@@ -78,13 +88,16 @@ type Wallet struct {
 	SignType string `protobuf:"bytes,5,opt,name=signType" json:"signType,omitempty"`
 }
 
+// Store 配置
 type Store struct {
-	Name    string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
-	Driver  string `protobuf:"bytes,2,opt,name=driver" json:"driver,omitempty"`
-	DbPath  string `protobuf:"bytes,3,opt,name=dbPath" json:"dbPath,omitempty"`
-	DbCache int32  `protobuf:"varint,4,opt,name=dbCache" json:"dbCache,omitempty"`
+	Name           string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Driver         string `protobuf:"bytes,2,opt,name=driver" json:"driver,omitempty"`
+	DbPath         string `protobuf:"bytes,3,opt,name=dbPath" json:"dbPath,omitempty"`
+	DbCache        int32  `protobuf:"varint,4,opt,name=dbCache" json:"dbCache,omitempty"`
+	LocalDBVersion string `protobuf:"bytes,5,opt,name=localdbVersion" json:"localdbVersion,omitempty"`
 }
 
+// BlockChain 配置
 type BlockChain struct {
 	DefCacheSize          int64  `protobuf:"varint,1,opt,name=defCacheSize" json:"defCacheSize,omitempty"`
 	MaxFetchBlockNum      int64  `protobuf:"varint,2,opt,name=maxFetchBlockNum" json:"maxFetchBlockNum,omitempty"`
@@ -101,8 +114,9 @@ type BlockChain struct {
 	EnableTxQuickIndex    bool   `protobuf:"varint,13,opt,name=enableTxQuickIndex" json:"enableTxQuickIndex,omitempty"`
 }
 
+// P2P 配置
 type P2P struct {
-	SeedPort        int32    `protobuf:"varint,1,opt,name=seedPort" json:"seedPort,omitempty"`
+	Port            int32    `protobuf:"varint,1,opt,name=port" json:"port,omitempty"`
 	Driver          string   `protobuf:"bytes,2,opt,name=driver" json:"driver,omitempty"`
 	DbPath          string   `protobuf:"bytes,3,opt,name=dbPath" json:"dbPath,omitempty"`
 	DbCache         int32    `protobuf:"varint,4,opt,name=dbCache" json:"dbCache,omitempty"`
@@ -113,14 +127,15 @@ type P2P struct {
 	Enable          bool     `protobuf:"varint,9,opt,name=enable" json:"enable,omitempty"`
 	MsgCacheSize    int32    `protobuf:"varint,10,opt,name=msgCacheSize" json:"msgCacheSize,omitempty"`
 	Version         int32    `protobuf:"varint,11,opt,name=version" json:"version,omitempty"`
-	VerMix          int32    `protobuf:"varint,12,opt,name=verMix" json:"verMix,omitempty"`
+	VerMin          int32    `protobuf:"varint,12,opt,name=verMin" json:"verMin,omitempty"`
 	VerMax          int32    `protobuf:"varint,13,opt,name=verMax" json:"verMax,omitempty"`
 	InnerSeedEnable bool     `protobuf:"varint,14,opt,name=innerSeedEnable" json:"innerSeedEnable,omitempty"`
 	InnerBounds     int32    `protobuf:"varint,15,opt,name=innerBounds" json:"innerBounds,omitempty"`
 	UseGithub       bool     `protobuf:"varint,16,opt,name=useGithub" json:"useGithub,omitempty"`
 }
 
-type Rpc struct {
+// RPC 配置
+type RPC struct {
 	JrpcBindAddr      string   `protobuf:"bytes,1,opt,name=jrpcBindAddr" json:"jrpcBindAddr,omitempty"`
 	GrpcBindAddr      string   `protobuf:"bytes,2,opt,name=grpcBindAddr" json:"grpcBindAddr,omitempty"`
 	Whitlist          []string `protobuf:"bytes,3,rep,name=whitlist" json:"whitlist,omitempty"`
@@ -130,8 +145,12 @@ type Rpc struct {
 	JrpcFuncBlacklist []string `protobuf:"bytes,7,rep,name=jrpcFuncBlacklist" json:"jrpcFuncBlacklist,omitempty"`
 	GrpcFuncBlacklist []string `protobuf:"bytes,8,rep,name=grpcFuncBlacklist" json:"grpcFuncBlacklist,omitempty"`
 	MainnetJrpcAddr   string   `protobuf:"bytes,9,opt,name=mainnetJrpcAddr" json:"mainnetJrpcAddr,omitempty"`
+	EnableTLS         bool     `protobuf:"varint,10,opt,name=enableTLS" json:"enableTLS,omitempty"`
+	CertFile          string   `protobuf:"varint,11,opt,name=certFile" json:"certFile,omitempty"`
+	KeyFile           string   `protobuf:"varint,12,opt,name=keyFile" json:"keyFile,omitempty"`
 }
 
+// Exec 配置
 type Exec struct {
 	MinExecFee       int64    `protobuf:"varint,1,opt,name=minExecFee" json:"minExecFee,omitempty"`
 	IsFree           bool     `protobuf:"varint,2,opt,name=isFree" json:"isFree,omitempty"`
@@ -142,6 +161,7 @@ type Exec struct {
 	SaveTokenTxList  bool     `protobuf:"varint,6,opt,name=saveTokenTxList" json:"saveTokenTxList,omitempty"`
 }
 
+// Pprof 配置
 type Pprof struct {
 	ListenAddr string `protobuf:"bytes,1,opt,name=listenAddr" json:"listenAddr,omitempty"`
 }

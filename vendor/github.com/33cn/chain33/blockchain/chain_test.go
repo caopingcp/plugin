@@ -69,7 +69,7 @@ func TestBlockChain(t *testing.T) {
 	//等待共识模块增长10个区块
 	testProcAddBlockMsg(t, mock33, blockchain)
 
-	testGetBlock(t, blockchain)
+	curBlock := testGetBlock(t, blockchain)
 
 	testGetTx(t, blockchain)
 
@@ -111,14 +111,14 @@ func TestBlockChain(t *testing.T) {
 
 	testRemoveOrphanBlock(t, blockchain)
 
-	testDelBlock(t, blockchain)
-
-	//testLoadBlockBySequence(t, blockchain)
-
+	testLoadBlockBySequence(t, blockchain)
+	testAddBlockSeqCB(t, blockchain)
 	testProcDelParaChainBlockMsg(t, mock33, blockchain)
 
 	testProcAddParaChainBlockMsg(t, mock33, blockchain)
 	testProcBlockChainFork(t, blockchain)
+	testDelBlock(t, blockchain, curBlock)
+
 }
 
 func testProcAddBlockMsg(t *testing.T, mock33 *testnode.Chain33Mock, blockchain *blockchain.BlockChain) {
@@ -147,7 +147,7 @@ func testProcAddBlockMsg(t *testing.T, mock33 *testnode.Chain33Mock, blockchain 
 	chainlog.Info("testProcAddBlockMsg end --------------------")
 }
 
-func testGetBlock(t *testing.T, blockchain *blockchain.BlockChain) {
+func testGetBlock(t *testing.T, blockchain *blockchain.BlockChain) *types.Block {
 	chainlog.Info("testGetBlock begin --------------------")
 	curheight := blockchain.GetBlockHeight()
 	block, err := blockchain.GetBlock(curheight)
@@ -156,6 +156,8 @@ func testGetBlock(t *testing.T, blockchain *blockchain.BlockChain) {
 		t.Error("get block height error")
 	}
 	chainlog.Info("testGetBlock end --------------------")
+	return block.Block
+
 }
 
 func testGetTx(t *testing.T, blockchain *blockchain.BlockChain) {
@@ -632,15 +634,16 @@ func testGetSeqByHash(t *testing.T, blockchain *blockchain.BlockChain) {
 	reqBlock.IsDetail = true
 	hashes := make([][]byte, 1)
 	Sequences, err := blockchain.GetBlockSequences(&reqBlock)
+
 	if err == nil && Sequences != nil {
 		for index, sequence := range Sequences.Items {
 			hashes[index] = sequence.Hash
 		}
 	}
 
-	seq, err := blockchain.ProcGetSeqByHash(hashes[0])
-	if seq != -1 {
-		t.Error("testGetSeqByHash only para chain GetSeqByHash ")
+	seq, _ := blockchain.ProcGetSeqByHash(hashes[0])
+	if seq == -1 {
+		t.Error(" GetSeqByHash err")
 	}
 
 	chainlog.Info("testGetSeqByHash end --------------------")
@@ -781,7 +784,7 @@ func testProcGetBlockHash(t *testing.T, blockchain *blockchain.BlockChain) {
 	curheight := blockchain.GetBlockHeight()
 	block, err := blockchain.GetBlock(curheight - 5)
 	require.NoError(t, err)
-	height := &types.ReqInt{curheight - 5}
+	height := &types.ReqInt{Height: curheight - 5}
 	hash, err := blockchain.ProcGetBlockHash(height)
 	require.NoError(t, err)
 
@@ -819,16 +822,18 @@ func testRemoveOrphanBlock(t *testing.T, blockchain *blockchain.BlockChain) {
 	chainlog.Info("testRemoveOrphanBlock end --------------------")
 }
 
-func testDelBlock(t *testing.T, blockchain *blockchain.BlockChain) {
+func testDelBlock(t *testing.T, blockchain *blockchain.BlockChain, curBlock *types.Block) {
 	chainlog.Info("testDelBlock begin --------------------")
 	curheight := blockchain.GetBlockHeight()
 	block, err := blockchain.GetBlock(curheight)
 	require.NoError(t, err)
-	//copy block, or may be data race
-	tmp := *block.Block
-	tmp.Difficulty = block.Block.Difficulty - 100
-	newblock := *block
-	newblock.Block = &tmp
+	if curBlock == nil {
+		t.Error("testDelBlock curBlock is nil")
+	}
+
+	curBlock.Difficulty = block.Block.Difficulty - 100
+	newblock := types.BlockDetail{}
+	newblock.Block = curBlock
 
 	blockchain.ProcessBlock(true, &newblock, "1", true, 0)
 	chainlog.Info("testDelBlock end --------------------")
@@ -838,11 +843,12 @@ func testLoadBlockBySequence(t *testing.T, blockchain *blockchain.BlockChain) {
 	chainlog.Info("testLoadBlockBySequence begin ---------------------")
 
 	curheight := blockchain.GetBlockHeight()
-	block, err := blockchain.GetStore().LoadBlockBySequence(curheight)
+	lastseq, _ := blockchain.GetStore().LoadBlockLastSequence()
+	block, err := blockchain.GetStore().LoadBlockBySequence(lastseq)
 	require.NoError(t, err)
 
 	if block.Block.Height != curheight {
-		t.Error("testLoadBlockBySequence  block height check error")
+		t.Error("testLoadBlockBySequence", "curheight", curheight, "lastseq", lastseq, "Block.Height", block.Block.Height)
 	}
 	chainlog.Info("testLoadBlockBySequence end -------------------------")
 }
@@ -895,4 +901,34 @@ func testProcBlockChainFork(t *testing.T, blockchain *blockchain.BlockChain) {
 	curheight := blockchain.GetBlockHeight()
 	blockchain.ProcBlockChainFork(curheight-1, curheight+256, "self")
 	chainlog.Info("testProcBlockChainFork end --------------------")
+}
+
+func testAddBlockSeqCB(t *testing.T, blockchain *blockchain.BlockChain) {
+	chainlog.Info("testAddBlockSeqCB begin ---------------------")
+
+	cb := &types.BlockSeqCB{
+		Name:   "test",
+		URL:    "http://192.168.1.107:15760",
+		Encode: "json",
+	}
+
+	err := blockchain.ProcAddBlockSeqCB(cb)
+	require.NoError(t, err)
+
+	cbs, err := blockchain.ProcListBlockSeqCB()
+	require.NoError(t, err)
+	exist := false
+	for _, temcb := range cbs.Items {
+		if temcb.Name == cb.Name {
+			exist = true
+		}
+	}
+	if !exist {
+		t.Error("testAddBlockSeqCB  listSeqCB fail", "cb", cb, "cbs", cbs)
+	}
+	num := blockchain.ProcGetSeqCBLastNum(cb.Name)
+	if num != -1 {
+		t.Error("testAddBlockSeqCB  getSeqCBLastNum", "num", num, "name", cb.Name)
+	}
+	chainlog.Info("testAddBlockSeqCB end -------------------------")
 }

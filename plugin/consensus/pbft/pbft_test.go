@@ -62,14 +62,14 @@ func TestPbft(t *testing.T) {
 	clearTestData()
 }
 
-func initEnvPbft() (queue.Queue, *blockchain.BlockChain, *p2p.P2p, queue.Module, *mempool.Mempool, queue.Module, queue.Module, queue.Module) {
+func initEnvPbft() (queue.Queue, *blockchain.BlockChain, *p2p.P2p, queue.Module, queue.Module, *executor.Executor, queue.Module, queue.Module) {
 	var q = queue.New("channel")
 	flag.Parse()
 	cfg, sub := types.InitCfg("chain33.test.toml")
 	types.Init(cfg.Title, cfg)
 	chain := blockchain.New(cfg.BlockChain)
 	chain.SetQueueClient(q.Client())
-	mem := mempool.New(cfg.MemPool)
+	mem := mempool.New(cfg.Mempool, nil)
 	mem.SetQueueClient(q.Client())
 	exec := executor.New(cfg.Exec, sub.Exec)
 	exec.SetQueueClient(q.Client())
@@ -96,7 +96,7 @@ func sendReplyList(q queue.Queue) {
 			count++
 			createReplyList("test" + strconv.Itoa(count))
 			msg.Reply(client.NewMessage("consensus", types.EventReplyTxList,
-				&types.ReplyTxList{transactions}))
+				&types.ReplyTxList{Txs: transactions}))
 			if count == 5 {
 				time.Sleep(5 * time.Second)
 				break
@@ -125,7 +125,7 @@ func createReplyList(account string) {
 	var result []*types.Transaction
 	for j := 0; j < txSize; j++ {
 		//tx := &types.Transaction{}
-		val := &cty.CoinsAction_Transfer{&types.AssetsTransfer{Amount: 10}}
+		val := &cty.CoinsAction_Transfer{Transfer: &types.AssetsTransfer{Amount: 10}}
 		action := &cty.CoinsAction{Value: val, Ty: cty.CoinsActionTransfer}
 		tx := &types.Transaction{Execer: []byte("coins"), Payload: types.Encode(action), Fee: 0}
 		tx.To = "14qViLJfdGaP4EeHnDyJbEGQysnCpwn1gZ"
@@ -148,5 +148,5 @@ func clearTestData() {
 	if err != nil {
 		fmt.Println("delete wallet have a err:", err.Error())
 	}
-	fmt.Println("test data clear sucessfully!")
+	fmt.Println("test data clear successfully!")
 }

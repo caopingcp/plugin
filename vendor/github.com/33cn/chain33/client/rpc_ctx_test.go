@@ -294,7 +294,7 @@ func (c *GrpcCtx) Run() (err error) {
 	case "Version":
 		reply, err := rpc.Version(context.Background(), c.Params.(*types.ReqNil))
 		if err == nil {
-			*c.Res.(*types.Reply) = *reply
+			*c.Res.(*types.VersionInfo) = *reply
 		}
 		errRet = err
 	case "IsSync":
@@ -313,6 +313,12 @@ func (c *GrpcCtx) Run() (err error) {
 		reply, err := rpc.NetInfo(context.Background(), c.Params.(*types.ReqNil))
 		if err == nil {
 			*c.Res.(*types.NodeNetInfo) = *reply
+		}
+		errRet = err
+	case "GetSequenceByHash":
+		reply, err := rpc.GetSequenceByHash(context.Background(), c.Params.(*types.ReqHash))
+		if err == nil {
+			*c.Res.(*types.Int64) = *reply
 		}
 		errRet = err
 	default:

@@ -17,7 +17,7 @@ message PurchaseInfo {
 }
 
 message Powerball {
-    string                       powerballId                = 1;
+    string                       powerballID                = 1;
     int32                        status                     = 2;
     int64                        createHeight               = 3;
     int64                        accuFund                   = 4;
@@ -68,25 +68,25 @@ message PowerballCreate {
 }
 
 message PowerballBuy {
-    string powerballId = 1;
+    string powerballID = 1;
     int64  amount    = 2;
     BallNumber  number    = 3;
 }
 
 message PowerballPause {
-    string powerballId = 1;
+    string powerballID = 1;
 }
 
 message PowerballDraw {
-    string powerballId = 1;
+    string powerballID = 1;
 }
 
 message PowerballClose {
-    string powerballId = 1;
+    string powerballID = 1;
 }
 
 message ReceiptPowerball {
-    string               powerballId   = 1;
+    string               powerballID   = 1;
     int32                status      = 2;
     int32                prevStatus  = 3;
     string               addr        = 4;
@@ -101,17 +101,17 @@ message ReceiptPowerball {
 }
 
 message ReqPowerballInfo {
-    string powerballId = 1;
+    string powerballID = 1;
 }
 
 message ReqPowerballBuyInfo {
-    string powerballId = 1;
+    string powerballID = 1;
     string addr      = 2;
     int64  round     = 3;
 }
 
 message ReqPowerballBuyHistory {
-    string powerballId = 1;
+    string powerballID = 1;
     string addr      = 2;
     int64  round     = 3;
     int32  count     = 4;
@@ -120,12 +120,12 @@ message ReqPowerballBuyHistory {
 }
 
 message ReqPowerballLuckyInfo {
-    string   powerballId   = 1;
+    string   powerballID   = 1;
     repeated int64 round = 2;
 }
 
 message ReqPowerballLuckyHistory {
-    string powerballId = 1;
+    string powerballID = 1;
     int64  round     = 2;
     int32  count     = 3;
     int32  direction = 4;

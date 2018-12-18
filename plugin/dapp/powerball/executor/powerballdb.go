@@ -93,10 +93,10 @@ type PowerballDB struct {
 }
 
 // NewPowerballDB method
-func NewPowerballDB(powerballId string, purTime string, drawTime string, ticketPrice int64,
+func NewPowerballDB(powerballID string, purTime string, drawTime string, ticketPrice int64,
 	platformRatio int64, developRatio int64, blockHeight int64, addr string) *PowerballDB {
 	ball := &PowerballDB{}
-	ball.PowerballId = powerballId
+	ball.PowerballID = powerballID
 	ball.PurTime = purTime
 	ball.DrawTime = drawTime
 	ball.TicketPrice = ticketPrice
@@ -119,7 +119,7 @@ func NewPowerballDB(powerballId string, purTime string, drawTime string, ticketP
 // GetKVSet method
 func (ball *PowerballDB) GetKVSet() (kvset []*types.KeyValue) {
 	value := types.Encode(&ball.Powerball)
-	kvset = append(kvset, &types.KeyValue{Key: Key(ball.PowerballId), Value: value})
+	kvset = append(kvset, &types.KeyValue{Key: Key(ball.PowerballID), Value: value})
 	return kvset
 }
 
@@ -154,6 +154,7 @@ type Action struct {
 	index        int
 }
 
+// NewPowerballAction method
 func NewPowerballAction(l *Powerball, tx *types.Transaction, index int) *Action {
 	hash := tx.Hash()
 	fromaddr := tx.From()
@@ -170,6 +171,7 @@ func NewPowerballAction(l *Powerball, tx *types.Transaction, index int) *Action 
 		l.GetHeight(), dapp.ExecAddress(string(tx.Execer)), l.GetDifficulty(), l.GetAPI(), conn, grpcClient, index}
 }
 
+// GetReceiptLog method
 func (action *Action) GetReceiptLog(powerball *pty.Powerball, preStatus int32, logTy int32,
 	round int64, buyNumber *pty.BallNumber, amount int64, luckyNum *pty.BallNumber, updateInfo *pty.PowerballUpdateBuyInfo) *types.ReceiptLog {
 	log := &types.ReceiptLog{}
@@ -177,7 +179,7 @@ func (action *Action) GetReceiptLog(powerball *pty.Powerball, preStatus int32, l
 
 	log.Ty = logTy
 
-	l.PowerballId = powerball.PowerballId
+	l.PowerballID = powerball.PowerballID
 	l.Status = powerball.Status
 	l.PrevStatus = preStatus
 	if logTy == pty.TyLogPowerballBuy {
@@ -214,19 +216,19 @@ func (action *Action) PowerballCreate(create *pty.PowerballCreate) (*types.Recei
 	var kv []*types.KeyValue
 	var receipt *types.Receipt
 
-	powerballId := common.ToHex(action.txhash)
+	powerballID := common.ToHex(action.txhash)
 
 	if !isRightCreator(action.fromaddr, action.db, true) {
 		return nil, pty.ErrNoPrivilege
 	}
 
-	_, err := findPowerball(action.db, powerballId)
+	_, err := findPowerball(action.db, powerballID)
 	if err != types.ErrNotFound {
-		pblog.Error("PowerballCreate", "PowerballCreate repeated", powerballId)
+		pblog.Error("PowerballCreate", "PowerballCreate repeated", powerballID)
 		return nil, pty.ErrPowerballRepeatHash
 	}
 
-	ball := NewPowerballDB(powerballId, create.GetPurTime(),
+	ball := NewPowerballDB(powerballID, create.GetPurTime(),
 		create.GetDrawTime(), create.GetTicketPrice(), create.GetPlatformRatio(), create.GetDevelopRatio(), action.height, action.fromaddr)
 
 	if types.IsPara() {
@@ -238,7 +240,7 @@ func (action *Action) PowerballCreate(create *pty.PowerballCreate) (*types.Recei
 		ball.CreateOnMain = mainHeight
 	}
 
-	pblog.Debug("PowerballCreate created", "powerballId", powerballId)
+	pblog.Debug("PowerballCreate created", "powerballId", powerballID)
 
 	ball.Save(action.db)
 	kv = append(kv, ball.GetKVSet()...)
@@ -256,9 +258,9 @@ func (action *Action) PowerballBuy(buy *pty.PowerballBuy) (*types.Receipt, error
 	var kv []*types.KeyValue
 	//var receipt *types.Receipt
 
-	powerball, err := findPowerball(action.db, buy.PowerballId)
+	powerball, err := findPowerball(action.db, buy.PowerballID)
 	if err != nil {
-		pblog.Error("PowerballBuy", "PowerballId", buy.PowerballId)
+		pblog.Error("PowerballBuy", "PowerballId", buy.PowerballID)
 		return nil, err
 	}
 
@@ -282,7 +284,7 @@ func (action *Action) PowerballBuy(buy *pty.PowerballBuy) (*types.Receipt, error
 		pblog.Debug("PowerballBuy switch to purchase state")
 		ball.LastTransToPurState = action.height
 		ball.Status = pty.PowerballPurchase
-		ball.Round += 1
+		ball.Round++
 		ball.LuckyNumber = nil
 		if types.IsPara() {
 			mainHeight := action.GetMainHeightByTxHash(action.txhash)
@@ -331,7 +333,7 @@ func (action *Action) PowerballBuy(buy *pty.PowerballBuy) (*types.Receipt, error
 		ball.PurInfos = make([]*pty.PurchaseInfo, 0, RedBalls)
 	}
 
-	newRecord := &pty.PowerPurchaseRecord{buy.GetAmount(), buy.GetNumber(), action.GetIndex()}
+	newRecord := &pty.PowerPurchaseRecord{Amount: buy.GetAmount(), Number: buy.GetNumber(), Index: action.GetIndex()}
 	pblog.Debug("PowerballBuy", "amount", buy.GetAmount(), "number", buy.GetNumber())
 
 	/**********
@@ -386,13 +388,14 @@ func (action *Action) PowerballBuy(buy *pty.PowerballBuy) (*types.Receipt, error
 	return receipt, nil
 }
 
+// PowerballPause pause powerball
 func (action *Action) PowerballPause(pause *pty.PowerballPause) (*types.Receipt, error) {
 	var logs []*types.ReceiptLog
 	var kv []*types.KeyValue
 
-	powerball, err := findPowerball(action.db, pause.PowerballId)
+	powerball, err := findPowerball(action.db, pause.PowerballID)
 	if err != nil {
-		pblog.Error("PowerballPause", "PowerballId", pause.PowerballId)
+		pblog.Error("PowerballPause", "PowerballId", pause.PowerballID)
 		return nil, err
 	}
 
@@ -425,7 +428,7 @@ func (action *Action) PowerballPause(pause *pty.PowerballPause) (*types.Receipt,
 		}
 	}
 
-	pblog.Debug("Powerball enter pause state", "PowerballId", pause.PowerballId)
+	pblog.Debug("Powerball enter pause state", "PowerballId", pause.PowerballID)
 	ball.Status = pty.PowerballPaused
 
 	ball.Save(action.db)
@@ -443,9 +446,9 @@ func (action *Action) PowerballDraw(draw *pty.PowerballDraw) (*types.Receipt, er
 	var kv []*types.KeyValue
 	var receipt *types.Receipt
 
-	powerball, err := findPowerball(action.db, draw.PowerballId)
+	powerball, err := findPowerball(action.db, draw.PowerballID)
 	if err != nil {
-		pblog.Error("PowerballBuy", "PowerballId", draw.PowerballId)
+		pblog.Error("PowerballBuy", "PowerballId", draw.PowerballID)
 		return nil, err
 	}
 
@@ -478,18 +481,19 @@ func (action *Action) PowerballDraw(draw *pty.PowerballDraw) (*types.Receipt, er
 	return receipt, nil
 }
 
+// PowerballClose close powerball
 func (action *Action) PowerballClose(draw *pty.PowerballClose) (*types.Receipt, error) {
 	var logs []*types.ReceiptLog
 	var kv []*types.KeyValue
 	//var receipt *types.Receipt
 
-	if !isEableToClose() {
+	if !isEnableToClose() {
 		return nil, pty.ErrPowerballErrUnableClose
 	}
 
-	powerball, err := findPowerball(action.db, draw.PowerballId)
+	powerball, err := findPowerball(action.db, draw.PowerballID)
 	if err != nil {
-		pblog.Error("PowerballBuy", "PowerballId", draw.PowerballId)
+		pblog.Error("PowerballBuy", "PowerballId", draw.PowerballID)
 		return nil, err
 	}
 
@@ -504,7 +508,7 @@ func (action *Action) PowerballClose(draw *pty.PowerballClose) (*types.Receipt, 
 		return nil, pty.ErrPowerballStatus
 	}
 
-	var totalReturn int64 = 0
+	var totalReturn int64
 	for _, item := range ball.PurInfos {
 		totalReturn += item.AmountOneRound
 	}
@@ -580,19 +584,20 @@ func (action *Action) getRandHash() ([]byte, error) {
 		}
 		reply := msg.(*types.ReplyHash)
 		return reply.Hash, nil
-	} else {
-		mainHeight := action.GetMainHeightByTxHash(action.txhash)
-		if mainHeight < 0 {
-			pblog.Error("getRandHash", "mainHeight", mainHeight)
-			return nil, errors.New("wrong height in mainchain")
-		}
-		req := &types.ReqRandHash{ExecName: "ticket", Height: mainHeight, BlockNum: blockNum}
-		reply, err := action.grpcClient.QueryRandNum(context.Background(), req)
-		if err != nil {
-			return nil, err
-		}
-		return reply.Hash, nil
 	}
+
+	mainHeight := action.GetMainHeightByTxHash(action.txhash)
+	if mainHeight < 0 {
+		pblog.Error("getRandHash", "mainHeight", mainHeight)
+		return nil, errors.New("wrong height in mainchain")
+	}
+	req := &types.ReqRandHash{ExecName: "ticket", Height: mainHeight, BlockNum: blockNum}
+	reply, err := action.grpcClient.QueryRandNum(context.Background(), req)
+	if err != nil {
+		return nil, err
+	}
+	return reply.Hash, nil
+
 }
 
 func genSeeds(modify []byte, count int) ([]uint64, error) {
@@ -677,7 +682,7 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 			totalPrizeCnt[level] += rec.Amount
 
 			if level > 0 {
-				newUpdateRec := &pty.PowerballUpdateRec{rec.Index, int32(level)}
+				newUpdateRec := &pty.PowerballUpdateRec{Index: rec.Index, Type: int32(level)}
 				exist := false
 				for _, update := range updateInfo.Updates {
 					if update.Addr == info.Addr {
@@ -820,39 +825,40 @@ func getManageKey(key string, db dbm.KV) ([]byte, error) {
 func isRightCreator(addr string, db dbm.KV, isSolo bool) bool {
 	if isSolo {
 		return true
-	} else {
-		value, err := getManageKey(creatorKey, db)
-		if err != nil {
-			pblog.Error("PowerballCreate", "creatorKey", creatorKey)
-			return false
-		}
-		if value == nil {
-			pblog.Error("PowerballCreate found nil value")
-			return false
-		}
+	}
 
-		var item types.ConfigItem
-		err = types.Decode(value, &item)
-		if err != nil {
-			pblog.Error("PowerballCreate", "Decode", value)
-			return false
-		}
-
-		for _, op := range item.GetArr().Value {
-			if op == addr {
-				return true
-			}
-		}
+	value, err := getManageKey(creatorKey, db)
+	if err != nil {
+		pblog.Error("PowerballCreate", "creatorKey", creatorKey)
 		return false
 	}
+	if value == nil {
+		pblog.Error("PowerballCreate found nil value")
+		return false
+	}
+
+	var item types.ConfigItem
+	err = types.Decode(value, &item)
+	if err != nil {
+		pblog.Error("PowerballCreate", "Decode", value)
+		return false
+	}
+
+	for _, op := range item.GetArr().Value {
+		if op == addr {
+			return true
+		}
+	}
+	return false
+
 }
 
-func isEableToClose() bool {
+func isEnableToClose() bool {
 	return true
 }
 
-func findPowerball(db dbm.KV, powerballId string) (*pty.Powerball, error) {
-	data, err := db.Get(Key(powerballId))
+func findPowerball(db dbm.KV, powerballID string) (*pty.Powerball, error) {
+	data, err := db.Get(Key(powerballID))
 	if err != nil {
 		pblog.Debug("findPowerball", "get", err)
 		return nil, err
@@ -867,6 +873,7 @@ func findPowerball(db dbm.KV, powerballId string) (*pty.Powerball, error) {
 	return &ball, nil
 }
 
+// CheckExecAccount method
 func (action *Action) CheckExecAccount(addr string, amount int64, isFrozen bool) bool {
 	acc := action.coinsAccount.LoadExecAccount(addr, action.execaddr)
 	if isFrozen {
@@ -882,15 +889,7 @@ func (action *Action) CheckExecAccount(addr string, amount int64, isFrozen bool)
 	return false
 }
 
-func (action *Action) GetExecAccount(addr string, isFrozen bool) int64 {
-	acc := action.coinsAccount.LoadExecAccount(addr, action.execaddr)
-	if isFrozen {
-		return acc.GetFrozen()
-	} else {
-		return acc.GetBalance()
-	}
-}
-
+// ListPowerballLuckyHistory method
 func ListPowerballLuckyHistory(db dbm.Lister, stateDB dbm.KV, param *pty.ReqPowerballLuckyHistory) (types.Message, error) {
 	direction := ListDESC
 	if param.GetDirection() == ListASC {
@@ -905,8 +904,8 @@ func ListPowerballLuckyHistory(db dbm.Lister, stateDB dbm.KV, param *pty.ReqPowe
 	var values [][]byte
 	var err error
 
-	prefix = calcPowerballDrawPrefix(param.PowerballId)
-	key = calcPowerballDrawKey(param.PowerballId, param.GetRound())
+	prefix = calcPowerballDrawPrefix(param.PowerballID)
+	key = calcPowerballDrawKey(param.PowerballID, param.GetRound())
 
 	if param.GetRound() == 0 { //第一次查询
 		values, err = db.List(prefix, nil, count, direction)
@@ -930,6 +929,7 @@ func ListPowerballLuckyHistory(db dbm.Lister, stateDB dbm.KV, param *pty.ReqPowe
 	return &records, nil
 }
 
+// ListPowerballBuyRecords method
 func ListPowerballBuyRecords(db dbm.Lister, stateDB dbm.KV, param *pty.ReqPowerballBuyHistory) (types.Message, error) {
 	direction := ListDESC
 	if param.GetDirection() == ListASC {
@@ -944,8 +944,8 @@ func ListPowerballBuyRecords(db dbm.Lister, stateDB dbm.KV, param *pty.ReqPowerb
 	var values [][]byte
 	var err error
 
-	prefix = calcPowerballBuyPrefix(param.PowerballId, param.Addr)
-	key = calcPowerballBuyKey(param.PowerballId, param.Addr, param.GetRound(), param.GetIndex())
+	prefix = calcPowerballBuyPrefix(param.PowerballID, param.Addr)
+	key = calcPowerballBuyKey(param.PowerballID, param.Addr, param.GetRound(), param.GetIndex())
 
 	if param.GetRound() == 0 { //第一次查询
 		values, err = db.List(prefix, nil, count, direction)
@@ -968,5 +968,4 @@ func ListPowerballBuyRecords(db dbm.Lister, stateDB dbm.KV, param *pty.ReqPowerb
 	}
 
 	return &records, nil
-
 }

@@ -24,17 +24,20 @@ func init() {
 	types.RegisterDappFork(PowerballX, "Enable", 0)
 }
 
+// PowerballType struct
 type PowerballType struct {
 	types.ExecTypeBase
 }
 
+// NewType method
 func NewType() *PowerballType {
 	c := &PowerballType{}
 	c.SetChild(c)
 	return c
 }
 
-func (at *PowerballType) GetLogMap() map[int64]*types.LogInfo {
+// GetLogMap method
+func (powerball *PowerballType) GetLogMap() map[int64]*types.LogInfo {
 	return map[int64]*types.LogInfo{
 		TyLogPowerballCreate: {reflect.TypeOf(ReceiptPowerball{}), "LogPowerballCreate"},
 		TyLogPowerballBuy:    {reflect.TypeOf(ReceiptPowerball{}), "LogPowerballBuy"},
@@ -43,13 +46,14 @@ func (at *PowerballType) GetLogMap() map[int64]*types.LogInfo {
 	}
 }
 
-func (at *PowerballType) GetPayload() types.Message {
+// GetPayload method
+func (powerball *PowerballType) GetPayload() types.Message {
 	return &PowerballAction{}
 }
 
+// CreateTx method
 func (powerball PowerballType) CreateTx(action string, message json.RawMessage) (*types.Transaction, error) {
 	plog.Debug("powerball.CreateTx", "action", action)
-	var tx *types.Transaction
 	if action == "PowerballCreate" {
 		var param PowerballCreateTx
 		err := json.Unmarshal(message, &param)
@@ -90,14 +94,13 @@ func (powerball PowerballType) CreateTx(action string, message json.RawMessage) 
 			return nil, types.ErrInvalidParam
 		}
 		return CreateRawPowerballCloseTx(&param)
-	} else {
-		return nil, types.ErrNotSupport
 	}
+	return nil, types.ErrNotSupport
 
-	return tx, nil
 }
 
-func (lott PowerballType) GetTypeMap() map[string]int32 {
+// GetTypeMap method
+func (powerball PowerballType) GetTypeMap() map[string]int32 {
 	return map[string]int32{
 		"Create": PowerballActionCreate,
 		"Buy":    PowerballActionBuy,
@@ -107,6 +110,7 @@ func (lott PowerballType) GetTypeMap() map[string]int32 {
 	}
 }
 
+// CreateRawPowerballCreateTx method
 func CreateRawPowerballCreateTx(parm *PowerballCreateTx) (*types.Transaction, error) {
 	if parm == nil {
 		plog.Error("CreateRawPowerballCreateTx", "parm", parm)
@@ -114,11 +118,11 @@ func CreateRawPowerballCreateTx(parm *PowerballCreateTx) (*types.Transaction, er
 	}
 
 	v := &PowerballCreate{
-		PurTime:  parm.PurTime,
-		DrawTime: parm.DrawTime,
-		TicketPrice: parm.TicketPrice,
+		PurTime:       parm.PurTime,
+		DrawTime:      parm.DrawTime,
+		TicketPrice:   parm.TicketPrice,
 		PlatformRatio: parm.PlatformRatio,
-		DevelopRatio: parm.DevelopRatio,
+		DevelopRatio:  parm.DevelopRatio,
 	}
 	create := &PowerballAction{
 		Ty:    PowerballActionCreate,
@@ -138,6 +142,7 @@ func CreateRawPowerballCreateTx(parm *PowerballCreateTx) (*types.Transaction, er
 	return tx, nil
 }
 
+// CreateRawPowerballBuyTx method
 func CreateRawPowerballBuyTx(parm *PowerballBuyTx) (*types.Transaction, error) {
 	if parm == nil {
 		plog.Error("CreateRawPowerballBuyTx", "parm", parm)
@@ -148,8 +153,8 @@ func CreateRawPowerballBuyTx(parm *PowerballBuyTx) (*types.Transaction, error) {
 		plog.Error("CreateRawPowerballBuyTx", "len", len(balls))
 		return nil, types.ErrInvalidParam
 	}
-	for i := 0; i< RedBalls-1; i++ {
-		for j:= i+1;j< RedBalls;j++ {
+	for i := 0; i < RedBalls-1; i++ {
+		for j := i + 1; j < RedBalls; j++ {
 			if balls[i] == balls[j] {
 				plog.Error("CreateRawPowerballBuyTx same red ball", "ballNumber", balls[i])
 				return nil, types.ErrInvalidParam
@@ -158,7 +163,7 @@ func CreateRawPowerballBuyTx(parm *PowerballBuyTx) (*types.Transaction, error) {
 	}
 
 	v := &PowerballBuy{
-		PowerballId: parm.PowerballId,
+		PowerballID: parm.PowerballID,
 		Amount:      parm.Amount,
 		Number:      &BallNumber{balls},
 	}
@@ -180,6 +185,7 @@ func CreateRawPowerballBuyTx(parm *PowerballBuyTx) (*types.Transaction, error) {
 	return tx, nil
 }
 
+// CreateRawPowerballPauseTx method
 func CreateRawPowerballPauseTx(parm *PowerballPauseTx) (*types.Transaction, error) {
 	if parm == nil {
 		plog.Error("CreateRawPowerballPauseTx", "parm", parm)
@@ -187,7 +193,7 @@ func CreateRawPowerballPauseTx(parm *PowerballPauseTx) (*types.Transaction, erro
 	}
 
 	v := &PowerballPause{
-		PowerballId: parm.PowerballId,
+		PowerballID: parm.PowerballID,
 	}
 	pause := &PowerballAction{
 		Ty:    PowerballActionPause,
@@ -207,6 +213,7 @@ func CreateRawPowerballPauseTx(parm *PowerballPauseTx) (*types.Transaction, erro
 	return tx, nil
 }
 
+// CreateRawPowerballDrawTx method
 func CreateRawPowerballDrawTx(parm *PowerballDrawTx) (*types.Transaction, error) {
 	if parm == nil {
 		plog.Error("CreateRawPowerballDrawTx", "parm", parm)
@@ -214,7 +221,7 @@ func CreateRawPowerballDrawTx(parm *PowerballDrawTx) (*types.Transaction, error)
 	}
 
 	v := &PowerballDraw{
-		PowerballId: parm.PowerballId,
+		PowerballID: parm.PowerballID,
 	}
 	draw := &PowerballAction{
 		Ty:    PowerballActionDraw,
@@ -234,6 +241,7 @@ func CreateRawPowerballDrawTx(parm *PowerballDrawTx) (*types.Transaction, error)
 	return tx, nil
 }
 
+// CreateRawPowerballCloseTx method
 func CreateRawPowerballCloseTx(parm *PowerballCloseTx) (*types.Transaction, error) {
 	if parm == nil {
 		plog.Error("CreateRawPowerballCloseTx", "parm", parm)
@@ -241,7 +249,7 @@ func CreateRawPowerballCloseTx(parm *PowerballCloseTx) (*types.Transaction, erro
 	}
 
 	v := &PowerballClose{
-		PowerballId: parm.PowerballId,
+		PowerballID: parm.PowerballID,
 	}
 	close := &PowerballAction{
 		Ty:    PowerballActionClose,

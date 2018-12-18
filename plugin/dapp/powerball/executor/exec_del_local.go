@@ -41,22 +41,27 @@ func (l *Powerball) execDelLocal(tx *types.Transaction, receiptData *types.Recei
 
 }
 
+// ExecDelLocal_Create action
 func (l *Powerball) ExecDelLocal_Create(payload *pty.PowerballCreate, tx *types.Transaction, receiptData *types.ReceiptData, index int) (*types.LocalDBSet, error) {
 	return nil, nil
 }
 
+// ExecDelLocal_Buy action
 func (l *Powerball) ExecDelLocal_Buy(payload *pty.PowerballBuy, tx *types.Transaction, receiptData *types.ReceiptData, index int) (*types.LocalDBSet, error) {
 	return nil, nil
 }
 
+// ExecDelLocal_Pause action
 func (l *Powerball) ExecDelLocal_Pause(payload *pty.PowerballPause, tx *types.Transaction, receiptData *types.ReceiptData, index int) (*types.LocalDBSet, error) {
 	return nil, nil
 }
 
+// ExecDelLocal_Draw action
 func (l *Powerball) ExecDelLocal_Draw(payload *pty.PowerballDraw, tx *types.Transaction, receiptData *types.ReceiptData, index int) (*types.LocalDBSet, error) {
 	return nil, nil
 }
 
+// ExecDelLocal_Close action
 func (l *Powerball) ExecDelLocal_Close(payload *pty.PowerballClose, tx *types.Transaction, receiptData *types.ReceiptData, index int) (*types.LocalDBSet, error) {
 	return nil, nil
 }

@@ -25,6 +25,7 @@ type subConfig struct {
 
 var cfg subConfig
 
+// Init powerball
 func Init(name string, sub []byte) {
 	driverName := GetName()
 	if name != driverName {
@@ -36,10 +37,12 @@ func Init(name string, sub []byte) {
 	drivers.Register(driverName, newPowerball, types.GetDappFork(driverName, "Enable"))
 }
 
+// GetName for powerball
 func GetName() string {
 	return newPowerball().GetName()
 }
 
+// Powerball driver
 type Powerball struct {
 	drivers.DriverBase
 }
@@ -51,7 +54,8 @@ func newPowerball() drivers.Driver {
 	return p
 }
 
-func (p *Powerball) GetDriverName() string {
+// GetDriverName for powerball
+func (ball *Powerball) GetDriverName() string {
 	return pty.PowerballX
 }
 
@@ -117,19 +121,16 @@ func (ball *Powerball) findPowerballDrawRecord(key []byte) (*pty.PowerballDrawRe
 }
 
 func (ball *Powerball) savePowerballBuy(powerballlog *pty.ReceiptPowerball) (kvs []*types.KeyValue) {
-	key := calcPowerballBuyKey(powerballlog.PowerballId, powerballlog.Addr, powerballlog.Round, powerballlog.Index)
-	kv := &types.KeyValue{}
-	record := &pty.PowerballBuyRecord{powerballlog.Number, powerballlog.Amount, powerballlog.Round, Zero, powerballlog.Index, powerballlog.Time, powerballlog.TxHash}
-	kv = &types.KeyValue{Key: key, Value: types.Encode(record)}
-
+	key := calcPowerballBuyKey(powerballlog.PowerballID, powerballlog.Addr, powerballlog.Round, powerballlog.Index)
+	record := &pty.PowerballBuyRecord{Number: powerballlog.Number, Amount: powerballlog.Amount, Round: powerballlog.Round, Type: Zero, Index: powerballlog.Index, Time: powerballlog.Time, TxHash: powerballlog.TxHash}
+	kv := &types.KeyValue{Key: key, Value: types.Encode(record)}
 	kvs = append(kvs, kv)
 	return
 }
 
 func (ball *Powerball) deletePowerballBuy(powerballlog *pty.ReceiptPowerball) (kvs []*types.KeyValue) {
-	key := calcPowerballBuyKey(powerballlog.PowerballId, powerballlog.Addr, powerballlog.Round, powerballlog.Index)
-
-	kv := &types.KeyValue{Key:key, Value:nil}
+	key := calcPowerballBuyKey(powerballlog.PowerballID, powerballlog.Addr, powerballlog.Round, powerballlog.Index)
+	kv := &types.KeyValue{Key: key, Value: nil}
 	kvs = append(kvs, kv)
 	return
 }
@@ -141,12 +142,11 @@ func (ball *Powerball) updatePowerballBuy(powerballlog *pty.ReceiptPowerball, is
 		for _, update := range powerballlog.UpdateInfo.Updates {
 			for _, updateRec := range update.Records {
 				//find addr, index
-				key := calcPowerballBuyKey(powerballlog.PowerballId, update.Addr, powerballlog.Round, updateRec.Index)
+				key := calcPowerballBuyKey(powerballlog.PowerballID, update.Addr, powerballlog.Round, updateRec.Index)
 				record, err := ball.findPowerballBuyRecord(key)
 				if err != nil || record == nil {
 					return
 				}
-				kv := &types.KeyValue{}
 
 				if isAdd {
 					pblog.Debug("updatePowerballBuy update key")
@@ -155,7 +155,7 @@ func (ball *Powerball) updatePowerballBuy(powerballlog *pty.ReceiptPowerball, is
 					record.Type = Zero
 				}
 
-				kv = &types.KeyValue{Key:key, Value:types.Encode(record)}
+				kv := &types.KeyValue{Key: key, Value: types.Encode(record)}
 				kvs = append(kvs, kv)
 			}
 		}
@@ -164,53 +164,53 @@ func (ball *Powerball) updatePowerballBuy(powerballlog *pty.ReceiptPowerball, is
 }
 
 func (ball *Powerball) savePowerballDraw(powerballlog *pty.ReceiptPowerball) (kvs []*types.KeyValue) {
-	key := calcPowerballDrawKey(powerballlog.PowerballId, powerballlog.Round)
-	kv := &types.KeyValue{}
-	record := &pty.PowerballDrawRecord{powerballlog.LuckyNumber, powerballlog.Round, powerballlog.Time, powerballlog.TxHash}
-	kv = &types.KeyValue{Key:key, Value:types.Encode(record)}
+	key := calcPowerballDrawKey(powerballlog.PowerballID, powerballlog.Round)
+	record := &pty.PowerballDrawRecord{Number: powerballlog.LuckyNumber, Round: powerballlog.Round, Time: powerballlog.Time, TxHash: powerballlog.TxHash}
+	kv := &types.KeyValue{Key: key, Value: types.Encode(record)}
 	kvs = append(kvs, kv)
 	return
 }
 
 func (ball *Powerball) deletePowerballDraw(powerballlog *pty.ReceiptPowerball) (kvs []*types.KeyValue) {
-	key := calcPowerballDrawKey(powerballlog.PowerballId, powerballlog.Round)
-	kv := &types.KeyValue{Key:key, Value:nil}
+	key := calcPowerballDrawKey(powerballlog.PowerballID, powerballlog.Round)
+	kv := &types.KeyValue{Key: key, Value: nil}
 	kvs = append(kvs, kv)
 	return
 }
 
 func (ball *Powerball) savePowerball(powerballlog *pty.ReceiptPowerball) (kvs []*types.KeyValue) {
 	if powerballlog.PrevStatus > 0 {
-		kv := delpowerball(powerballlog.PowerballId, powerballlog.PrevStatus)
+		kv := delpowerball(powerballlog.PowerballID, powerballlog.PrevStatus)
 		kvs = append(kvs, kv)
 	}
-	kvs = append(kvs, addpowerball(powerballlog.PowerballId, powerballlog.Status))
+	kvs = append(kvs, addpowerball(powerballlog.PowerballID, powerballlog.Status))
 	return
 }
 
 func (ball *Powerball) deletePowerball(powerballlog *pty.ReceiptPowerball) (kvs []*types.KeyValue) {
 	if powerballlog.PrevStatus > 0 {
-		kv := addpowerball(powerballlog.PowerballId, powerballlog.PrevStatus)
+		kv := addpowerball(powerballlog.PowerballID, powerballlog.PrevStatus)
 		kvs = append(kvs, kv)
 	}
-	kvs = append(kvs, delpowerball(powerballlog.PowerballId, powerballlog.Status))
+	kvs = append(kvs, delpowerball(powerballlog.PowerballID, powerballlog.Status))
 	return
 }
 
-func addpowerball(powerballId string, status int32) *types.KeyValue {
+func addpowerball(powerballID string, status int32) *types.KeyValue {
 	kv := &types.KeyValue{}
-	kv.Key = calcPowerballKey(powerballId, status)
-	kv.Value = []byte(powerballId)
+	kv.Key = calcPowerballKey(powerballID, status)
+	kv.Value = []byte(powerballID)
 	return kv
 }
 
-func delpowerball(powerballId string, status int32) *types.KeyValue {
+func delpowerball(powerballID string, status int32) *types.KeyValue {
 	kv := &types.KeyValue{}
-	kv.Key = calcPowerballKey(powerballId, status)
+	kv.Key = calcPowerballKey(powerballID, status)
 	kv.Value = nil
 	return kv
 }
 
+// GetPayloadValue for powerball
 func (ball *Powerball) GetPayloadValue() types.Message {
 	return &pty.PowerballAction{}
 }

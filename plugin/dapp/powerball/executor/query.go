@@ -9,23 +9,25 @@ import (
 	pty "github.com/33cn/plugin/plugin/dapp/powerball/types"
 )
 
+// Query_GetPowerballNormalInfo get powerball normal info
 func (l *Powerball) Query_GetPowerballNormalInfo(param *pty.ReqPowerballInfo) (types.Message, error) {
-	powerball, err := findPowerball(l.GetStateDB(), param.GetPowerballId())
+	powerball, err := findPowerball(l.GetStateDB(), param.GetPowerballID())
 	if err != nil {
 		return nil, err
 	}
 	return &pty.ReplyPowerballNormalInfo{
-		powerball.CreateHeight,
-		powerball.PurTime,
-		powerball.DrawTime,
-		powerball.TicketPrice,
-		powerball.PlatformRatio,
-		powerball.DevelopRatio,
-		powerball.CreateAddr}, nil
+		CreateHeight:  powerball.CreateHeight,
+		PurTime:       powerball.PurTime,
+		DrawTime:      powerball.DrawTime,
+		TicketPrice:   powerball.TicketPrice,
+		PlatformRatio: powerball.PlatformRatio,
+		DevelopRatio:  powerball.DevelopRatio,
+		CreateAddr:    powerball.CreateAddr}, nil
 }
 
+// Query_GetPowerballPurchaseAddr get purchase address
 func (l *Powerball) Query_GetPowerballPurchaseAddr(param *pty.ReqPowerballInfo) (types.Message, error) {
-	powerball, err := findPowerball(l.GetStateDB(), param.GetPowerballId())
+	powerball, err := findPowerball(l.GetStateDB(), param.GetPowerballID())
 	if err != nil {
 		return nil, err
 	}
@@ -37,8 +39,9 @@ func (l *Powerball) Query_GetPowerballPurchaseAddr(param *pty.ReqPowerballInfo) 
 	return reply, nil
 }
 
+// Query_GetPowerballCurrentInfo get powerball current info
 func (l *Powerball) Query_GetPowerballCurrentInfo(param *pty.ReqPowerballInfo) (types.Message, error) {
-	powerball, err := findPowerball(l.GetStateDB(), param.GetPowerballId())
+	powerball, err := findPowerball(l.GetStateDB(), param.GetPowerballID())
 	if err != nil {
 		return nil, err
 	}
@@ -60,10 +63,12 @@ func (l *Powerball) Query_GetPowerballCurrentInfo(param *pty.ReqPowerballInfo) (
 	return reply, nil
 }
 
+// Query_GetPowerballHistoryLuckyNumber get history lucky number
 func (l *Powerball) Query_GetPowerballHistoryLuckyNumber(param *pty.ReqPowerballLuckyHistory) (types.Message, error) {
 	return ListPowerballLuckyHistory(l.GetLocalDB(), l.GetStateDB(), param)
 }
 
+// Query_GetPowerballRoundLuckyNumber get lucky number at some rounds
 func (l *Powerball) Query_GetPowerballRoundLuckyNumber(param *pty.ReqPowerballLuckyInfo) (types.Message, error) {
 	//	var req pty.ReqPowerballLuckyInfo
 	var records []*pty.PowerballDrawRecord
@@ -72,7 +77,7 @@ func (l *Powerball) Query_GetPowerballRoundLuckyNumber(param *pty.ReqPowerballLu
 	//	return nil, err
 	//}
 	for _, round := range param.Round {
-		key := calcPowerballDrawKey(param.PowerballId, round)
+		key := calcPowerballDrawKey(param.PowerballID, round)
 		record, err := l.findPowerballDrawRecord(key)
 		if err != nil {
 			return nil, err
@@ -83,12 +88,14 @@ func (l *Powerball) Query_GetPowerballRoundLuckyNumber(param *pty.ReqPowerballLu
 	return &pty.PowerballDrawRecords{Records: records}, nil
 }
 
+// Query_GetPowerballHistoryBuyInfo get history buy number
 func (l *Powerball) Query_GetPowerballHistoryBuyInfo(param *pty.ReqPowerballBuyHistory) (types.Message, error) {
 	return ListPowerballBuyRecords(l.GetLocalDB(), l.GetStateDB(), param)
 }
 
+// Query_GetPowerballBuyRoundInfo get buy number at some round
 func (l *Powerball) Query_GetPowerballBuyRoundInfo(param *pty.ReqPowerballBuyInfo) (types.Message, error) {
-	key := calcPowerballBuyRoundPrefix(param.PowerballId, param.Addr, param.Round)
+	key := calcPowerballBuyRoundPrefix(param.PowerballID, param.Addr, param.Round)
 	record, err := l.findPowerballBuyRecords(key)
 	if err != nil {
 		return nil, err

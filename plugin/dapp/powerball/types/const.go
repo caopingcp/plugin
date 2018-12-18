@@ -4,6 +4,7 @@
 
 package types
 
+// PowerballX name
 const PowerballX = "powerball"
 
 // ball number and range

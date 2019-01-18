@@ -4,13 +4,10 @@
 package types
 
 import (
-	context "context"
 	fmt "fmt"
 	math "math"
 
-	types "github.com/33cn/chain33/types"
 	proto "github.com/golang/protobuf/proto"
-	grpc "google.golang.org/grpc"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -28,7 +25,7 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 type PokerBull struct {
 	GameId               string      `protobuf:"bytes,1,opt,name=gameId,proto3" json:"gameId,omitempty"`
 	Status               int32       `protobuf:"varint,2,opt,name=status,proto3" json:"status,omitempty"`
-	StartTime            int64       `protobuf:"varint,3,opt,name=startTime,proto3" json:"startTime,omitempty"`
+	StartTime            string      `protobuf:"bytes,3,opt,name=startTime,proto3" json:"startTime,omitempty"`
 	StartTxHash          string      `protobuf:"bytes,4,opt,name=startTxHash,proto3" json:"startTxHash,omitempty"`
 	Value                int64       `protobuf:"varint,5,opt,name=value,proto3" json:"value,omitempty"`
 	Poker                *PBPoker    `protobuf:"bytes,6,opt,name=poker,proto3" json:"poker,omitempty"`
@@ -37,11 +34,12 @@ type PokerBull struct {
 	Results              []*PBResult `protobuf:"bytes,9,rep,name=results,proto3" json:"results,omitempty"`
 	Index                int64       `protobuf:"varint,10,opt,name=index,proto3" json:"index,omitempty"`
 	PrevIndex            int64       `protobuf:"varint,11,opt,name=prevIndex,proto3" json:"prevIndex,omitempty"`
-	QuitTime             int64       `protobuf:"varint,12,opt,name=quitTime,proto3" json:"quitTime,omitempty"`
+	QuitTime             string      `protobuf:"bytes,12,opt,name=quitTime,proto3" json:"quitTime,omitempty"`
 	QuitTxHash           string      `protobuf:"bytes,13,opt,name=quitTxHash,proto3" json:"quitTxHash,omitempty"`
 	DealerAddr           string      `protobuf:"bytes,14,opt,name=dealerAddr,proto3" json:"dealerAddr,omitempty"`
 	IsWaiting            bool        `protobuf:"varint,15,opt,name=isWaiting,proto3" json:"isWaiting,omitempty"`
 	PreStatus            int32       `protobuf:"varint,16,opt,name=preStatus,proto3" json:"preStatus,omitempty"`
+	Round                int32       `protobuf:"varint,17,opt,name=round,proto3" json:"round,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
 	XXX_unrecognized     []byte      `json:"-"`
 	XXX_sizecache        int32       `json:"-"`
@@ -86,11 +84,11 @@ func (m *PokerBull) GetStatus() int32 {
 	return 0
 }
 
-func (m *PokerBull) GetStartTime() int64 {
+func (m *PokerBull) GetStartTime() string {
 	if m != nil {
 		return m.StartTime
 	}
-	return 0
+	return ""
 }
 
 func (m *PokerBull) GetStartTxHash() string {
@@ -149,11 +147,11 @@ func (m *PokerBull) GetPrevIndex() int64 {
 	return 0
 }
 
-func (m *PokerBull) GetQuitTime() int64 {
+func (m *PokerBull) GetQuitTime() string {
 	if m != nil {
 		return m.QuitTime
 	}
-	return 0
+	return ""
 }
 
 func (m *PokerBull) GetQuitTxHash() string {
@@ -184,6 +182,13 @@ func (m *PokerBull) GetPreStatus() int32 {
 	return 0
 }
 
+func (m *PokerBull) GetRound() int32 {
+	if m != nil {
+		return m.Round
+	}
+	return 0
+}
+
 //一把牌
 type PBHand struct {
 	Cards                []int32  `protobuf:"varint,1,rep,packed,name=cards,proto3" json:"cards,omitempty"`
@@ -191,6 +196,7 @@ type PBHand struct {
 	Address              string   `protobuf:"bytes,3,opt,name=address,proto3" json:"address,omitempty"`
 	IsWin                bool     `protobuf:"varint,4,opt,name=isWin,proto3" json:"isWin,omitempty"`
 	Leverage             int32    `protobuf:"varint,5,opt,name=leverage,proto3" json:"leverage,omitempty"`
+	RoundTime            string   `protobuf:"bytes,6,opt,name=roundTime,proto3" json:"roundTime,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -256,12 +262,20 @@ func (m *PBHand) GetLeverage() int32 {
 	return 0
 }
 
+func (m *PBHand) GetRoundTime() string {
+	if m != nil {
+		return m.RoundTime
+	}
+	return ""
+}
+
 //玩家
 type PBPlayer struct {
 	Hands                []*PBHand `protobuf:"bytes,1,rep,name=hands,proto3" json:"hands,omitempty"`
 	Address              string    `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
 	TxHash               int64     `protobuf:"varint,3,opt,name=txHash,proto3" json:"txHash,omitempty"`
 	Ready                bool      `protobuf:"varint,4,opt,name=ready,proto3" json:"ready,omitempty"`
+	MatchTime            string    `protobuf:"bytes,5,opt,name=matchTime,proto3" json:"matchTime,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
 	XXX_unrecognized     []byte    `json:"-"`
 	XXX_sizecache        int32     `json:"-"`
@@ -318,6 +332,13 @@ func (m *PBPlayer) GetReady() bool {
 		return m.Ready
 	}
 	return false
+}
+
+func (m *PBPlayer) GetMatchTime() string {
+	if m != nil {
+		return m.MatchTime
+	}
+	return ""
 }
 
 //本局游戏结果
@@ -447,6 +468,7 @@ type PBGameAction struct {
 	//	*PBGameAction_Continue
 	//	*PBGameAction_Quit
 	//	*PBGameAction_Query
+	//	*PBGameAction_Play
 	Value                isPBGameAction_Value `protobuf_oneof:"value"`
 	Ty                   int32                `protobuf:"varint,10,opt,name=ty,proto3" json:"ty,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
@@ -499,6 +521,10 @@ type PBGameAction_Query struct {
 	Query *PBGameQuery `protobuf:"bytes,4,opt,name=query,proto3,oneof"`
 }
 
+type PBGameAction_Play struct {
+	Play *PBGamePlay `protobuf:"bytes,5,opt,name=play,proto3,oneof"`
+}
+
 func (*PBGameAction_Start) isPBGameAction_Value() {}
 
 func (*PBGameAction_Continue) isPBGameAction_Value() {}
@@ -506,6 +532,8 @@ func (*PBGameAction_Continue) isPBGameAction_Value() {}
 func (*PBGameAction_Quit) isPBGameAction_Value() {}
 
 func (*PBGameAction_Query) isPBGameAction_Value() {}
+
+func (*PBGameAction_Play) isPBGameAction_Value() {}
 
 func (m *PBGameAction) GetValue() isPBGameAction_Value {
 	if m != nil {
@@ -542,6 +570,13 @@ func (m *PBGameAction) GetQuery() *PBGameQuery {
 	return nil
 }
 
+func (m *PBGameAction) GetPlay() *PBGamePlay {
+	if x, ok := m.GetValue().(*PBGameAction_Play); ok {
+		return x.Play
+	}
+	return nil
+}
+
 func (m *PBGameAction) GetTy() int32 {
 	if m != nil {
 		return m.Ty
@@ -556,6 +591,7 @@ func (*PBGameAction) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) 
 		(*PBGameAction_Continue)(nil),
 		(*PBGameAction_Quit)(nil),
 		(*PBGameAction_Query)(nil),
+		(*PBGameAction_Play)(nil),
 	}
 }
 
@@ -581,6 +617,11 @@ func _PBGameAction_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
 	case *PBGameAction_Query:
 		b.EncodeVarint(4<<3 | proto.WireBytes)
 		if err := b.EncodeMessage(x.Query); err != nil {
+			return err
+		}
+	case *PBGameAction_Play:
+		b.EncodeVarint(5<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.Play); err != nil {
 			return err
 		}
 	case nil:
@@ -625,6 +666,14 @@ func _PBGameAction_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.B
 		err := b.DecodeMessage(msg)
 		m.Value = &PBGameAction_Query{msg}
 		return true, err
+	case 5: // value.play
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(PBGamePlay)
+		err := b.DecodeMessage(msg)
+		m.Value = &PBGameAction_Play{msg}
+		return true, err
 	default:
 		return false, nil
 	}
@@ -651,6 +700,11 @@ func _PBGameAction_OneofSizer(msg proto.Message) (n int) {
 		n += s
 	case *PBGameAction_Query:
 		s := proto.Size(x.Query)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case *PBGameAction_Play:
+		s := proto.Size(x.Play)
 		n += 1 // tag and wire
 		n += proto.SizeVarint(uint64(s))
 		n += s
@@ -829,6 +883,70 @@ func (m *PBGameQuery) GetGameId() string {
 	return ""
 }
 
+//已匹配玩家直接游戏
+type PBGamePlay struct {
+	GameId               string   `protobuf:"bytes,1,opt,name=gameId,proto3" json:"gameId,omitempty"`
+	Round                int32    `protobuf:"varint,2,opt,name=round,proto3" json:"round,omitempty"`
+	Value                int64    `protobuf:"varint,3,opt,name=value,proto3" json:"value,omitempty"`
+	Address              []string `protobuf:"bytes,4,rep,name=address,proto3" json:"address,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *PBGamePlay) Reset()         { *m = PBGamePlay{} }
+func (m *PBGamePlay) String() string { return proto.CompactTextString(m) }
+func (*PBGamePlay) ProtoMessage()    {}
+func (*PBGamePlay) Descriptor() ([]byte, []int) {
+	return fileDescriptor_8d22e4ee2313e311, []int{10}
+}
+
+func (m *PBGamePlay) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_PBGamePlay.Unmarshal(m, b)
+}
+func (m *PBGamePlay) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_PBGamePlay.Marshal(b, m, deterministic)
+}
+func (m *PBGamePlay) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PBGamePlay.Merge(m, src)
+}
+func (m *PBGamePlay) XXX_Size() int {
+	return xxx_messageInfo_PBGamePlay.Size(m)
+}
+func (m *PBGamePlay) XXX_DiscardUnknown() {
+	xxx_messageInfo_PBGamePlay.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_PBGamePlay proto.InternalMessageInfo
+
+func (m *PBGamePlay) GetGameId() string {
+	if m != nil {
+		return m.GameId
+	}
+	return ""
+}
+
+func (m *PBGamePlay) GetRound() int32 {
+	if m != nil {
+		return m.Round
+	}
+	return 0
+}
+
+func (m *PBGamePlay) GetValue() int64 {
+	if m != nil {
+		return m.Value
+	}
+	return 0
+}
+
+func (m *PBGamePlay) GetAddress() []string {
+	if m != nil {
+		return m.Address
+	}
+	return nil
+}
+
 //根据状态和游戏人数查找
 type QueryPBGameListByStatusAndPlayerNum struct {
 	Status               int32    `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
@@ -843,7 +961,7 @@ func (m *QueryPBGameListByStatusAndPlayerNum) Reset()         { *m = QueryPBGame
 func (m *QueryPBGameListByStatusAndPlayerNum) String() string { return proto.CompactTextString(m) }
 func (*QueryPBGameListByStatusAndPlayerNum) ProtoMessage()    {}
 func (*QueryPBGameListByStatusAndPlayerNum) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8d22e4ee2313e311, []int{10}
+	return fileDescriptor_8d22e4ee2313e311, []int{11}
 }
 
 func (m *QueryPBGameListByStatusAndPlayerNum) XXX_Unmarshal(b []byte) error {
@@ -899,7 +1017,7 @@ func (m *PBGameRecord) Reset()         { *m = PBGameRecord{} }
 func (m *PBGameRecord) String() string { return proto.CompactTextString(m) }
 func (*PBGameRecord) ProtoMessage()    {}
 func (*PBGameRecord) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8d22e4ee2313e311, []int{11}
+	return fileDescriptor_8d22e4ee2313e311, []int{12}
 }
 
 func (m *PBGameRecord) XXX_Unmarshal(b []byte) error {
@@ -953,7 +1071,7 @@ func (m *PBGameIndexRecord) Reset()         { *m = PBGameIndexRecord{} }
 func (m *PBGameIndexRecord) String() string { return proto.CompactTextString(m) }
 func (*PBGameIndexRecord) ProtoMessage()    {}
 func (*PBGameIndexRecord) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8d22e4ee2313e311, []int{12}
+	return fileDescriptor_8d22e4ee2313e311, []int{13}
 }
 
 func (m *PBGameIndexRecord) XXX_Unmarshal(b []byte) error {
@@ -999,7 +1117,7 @@ func (m *PBGameRecords) Reset()         { *m = PBGameRecords{} }
 func (m *PBGameRecords) String() string { return proto.CompactTextString(m) }
 func (*PBGameRecords) ProtoMessage()    {}
 func (*PBGameRecords) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8d22e4ee2313e311, []int{13}
+	return fileDescriptor_8d22e4ee2313e311, []int{14}
 }
 
 func (m *PBGameRecords) XXX_Unmarshal(b []byte) error {
@@ -1027,6 +1145,45 @@ func (m *PBGameRecords) GetRecords() []*PBGameRecord {
 	return nil
 }
 
+type PBGameIndexRecords struct {
+	Records              []*PBGameIndexRecord `protobuf:"bytes,1,rep,name=records,proto3" json:"records,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
+	XXX_unrecognized     []byte               `json:"-"`
+	XXX_sizecache        int32                `json:"-"`
+}
+
+func (m *PBGameIndexRecords) Reset()         { *m = PBGameIndexRecords{} }
+func (m *PBGameIndexRecords) String() string { return proto.CompactTextString(m) }
+func (*PBGameIndexRecords) ProtoMessage()    {}
+func (*PBGameIndexRecords) Descriptor() ([]byte, []int) {
+	return fileDescriptor_8d22e4ee2313e311, []int{15}
+}
+
+func (m *PBGameIndexRecords) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_PBGameIndexRecords.Unmarshal(m, b)
+}
+func (m *PBGameIndexRecords) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_PBGameIndexRecords.Marshal(b, m, deterministic)
+}
+func (m *PBGameIndexRecords) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PBGameIndexRecords.Merge(m, src)
+}
+func (m *PBGameIndexRecords) XXX_Size() int {
+	return xxx_messageInfo_PBGameIndexRecords.Size(m)
+}
+func (m *PBGameIndexRecords) XXX_DiscardUnknown() {
+	xxx_messageInfo_PBGameIndexRecords.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_PBGameIndexRecords proto.InternalMessageInfo
+
+func (m *PBGameIndexRecords) GetRecords() []*PBGameIndexRecord {
+	if m != nil {
+		return m.Records
+	}
+	return nil
+}
+
 type QueryPBGameInfo struct {
 	GameId               string   `protobuf:"bytes,1,opt,name=gameId,proto3" json:"gameId,omitempty"`
 	Addr                 string   `protobuf:"bytes,2,opt,name=addr,proto3" json:"addr,omitempty"`
@@ -1041,7 +1198,7 @@ func (m *QueryPBGameInfo) Reset()         { *m = QueryPBGameInfo{} }
 func (m *QueryPBGameInfo) String() string { return proto.CompactTextString(m) }
 func (*QueryPBGameInfo) ProtoMessage()    {}
 func (*QueryPBGameInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8d22e4ee2313e311, []int{14}
+	return fileDescriptor_8d22e4ee2313e311, []int{16}
 }
 
 func (m *QueryPBGameInfo) XXX_Unmarshal(b []byte) error {
@@ -1101,7 +1258,7 @@ func (m *ReplyPBGame) Reset()         { *m = ReplyPBGame{} }
 func (m *ReplyPBGame) String() string { return proto.CompactTextString(m) }
 func (*ReplyPBGame) ProtoMessage()    {}
 func (*ReplyPBGame) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8d22e4ee2313e311, []int{15}
+	return fileDescriptor_8d22e4ee2313e311, []int{17}
 }
 
 func (m *ReplyPBGame) XXX_Unmarshal(b []byte) error {
@@ -1140,7 +1297,7 @@ func (m *QueryPBGameInfos) Reset()         { *m = QueryPBGameInfos{} }
 func (m *QueryPBGameInfos) String() string { return proto.CompactTextString(m) }
 func (*QueryPBGameInfos) ProtoMessage()    {}
 func (*QueryPBGameInfos) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8d22e4ee2313e311, []int{16}
+	return fileDescriptor_8d22e4ee2313e311, []int{18}
 }
 
 func (m *QueryPBGameInfos) XXX_Unmarshal(b []byte) error {
@@ -1179,7 +1336,7 @@ func (m *ReplyPBGameList) Reset()         { *m = ReplyPBGameList{} }
 func (m *ReplyPBGameList) String() string { return proto.CompactTextString(m) }
 func (*ReplyPBGameList) ProtoMessage()    {}
 func (*ReplyPBGameList) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8d22e4ee2313e311, []int{17}
+	return fileDescriptor_8d22e4ee2313e311, []int{19}
 }
 
 func (m *ReplyPBGameList) XXX_Unmarshal(b []byte) error {
@@ -1207,6 +1364,142 @@ func (m *ReplyPBGameList) GetGames() []*PokerBull {
 	return nil
 }
 
+// QueryPBGameByRound 根据gameId和回合数查询某回合的游戏结果
+type QueryPBGameByRound struct {
+	GameId               string   `protobuf:"bytes,1,opt,name=gameId,proto3" json:"gameId,omitempty"`
+	Round                int32    `protobuf:"varint,2,opt,name=round,proto3" json:"round,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *QueryPBGameByRound) Reset()         { *m = QueryPBGameByRound{} }
+func (m *QueryPBGameByRound) String() string { return proto.CompactTextString(m) }
+func (*QueryPBGameByRound) ProtoMessage()    {}
+func (*QueryPBGameByRound) Descriptor() ([]byte, []int) {
+	return fileDescriptor_8d22e4ee2313e311, []int{20}
+}
+
+func (m *QueryPBGameByRound) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_QueryPBGameByRound.Unmarshal(m, b)
+}
+func (m *QueryPBGameByRound) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_QueryPBGameByRound.Marshal(b, m, deterministic)
+}
+func (m *QueryPBGameByRound) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryPBGameByRound.Merge(m, src)
+}
+func (m *QueryPBGameByRound) XXX_Size() int {
+	return xxx_messageInfo_QueryPBGameByRound.Size(m)
+}
+func (m *QueryPBGameByRound) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryPBGameByRound.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryPBGameByRound proto.InternalMessageInfo
+
+func (m *QueryPBGameByRound) GetGameId() string {
+	if m != nil {
+		return m.GameId
+	}
+	return ""
+}
+
+func (m *QueryPBGameByRound) GetRound() int32 {
+	if m != nil {
+		return m.Round
+	}
+	return 0
+}
+
+// ReplyPBGameByRound 某一回合游戏结果
+type ReplyPBGameByRound struct {
+	GameId               string      `protobuf:"bytes,1,opt,name=gameId,proto3" json:"gameId,omitempty"`
+	Status               int32       `protobuf:"varint,2,opt,name=status,proto3" json:"status,omitempty"`
+	Result               *PBResult   `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
+	IsWaiting            bool        `protobuf:"varint,4,opt,name=isWaiting,proto3" json:"isWaiting,omitempty"`
+	Value                int64       `protobuf:"varint,5,opt,name=value,proto3" json:"value,omitempty"`
+	Players              []*PBPlayer `protobuf:"bytes,6,rep,name=players,proto3" json:"players,omitempty"`
+	Return               int64       `protobuf:"varint,7,opt,name=return,proto3" json:"return,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
+}
+
+func (m *ReplyPBGameByRound) Reset()         { *m = ReplyPBGameByRound{} }
+func (m *ReplyPBGameByRound) String() string { return proto.CompactTextString(m) }
+func (*ReplyPBGameByRound) ProtoMessage()    {}
+func (*ReplyPBGameByRound) Descriptor() ([]byte, []int) {
+	return fileDescriptor_8d22e4ee2313e311, []int{21}
+}
+
+func (m *ReplyPBGameByRound) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ReplyPBGameByRound.Unmarshal(m, b)
+}
+func (m *ReplyPBGameByRound) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ReplyPBGameByRound.Marshal(b, m, deterministic)
+}
+func (m *ReplyPBGameByRound) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ReplyPBGameByRound.Merge(m, src)
+}
+func (m *ReplyPBGameByRound) XXX_Size() int {
+	return xxx_messageInfo_ReplyPBGameByRound.Size(m)
+}
+func (m *ReplyPBGameByRound) XXX_DiscardUnknown() {
+	xxx_messageInfo_ReplyPBGameByRound.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ReplyPBGameByRound proto.InternalMessageInfo
+
+func (m *ReplyPBGameByRound) GetGameId() string {
+	if m != nil {
+		return m.GameId
+	}
+	return ""
+}
+
+func (m *ReplyPBGameByRound) GetStatus() int32 {
+	if m != nil {
+		return m.Status
+	}
+	return 0
+}
+
+func (m *ReplyPBGameByRound) GetResult() *PBResult {
+	if m != nil {
+		return m.Result
+	}
+	return nil
+}
+
+func (m *ReplyPBGameByRound) GetIsWaiting() bool {
+	if m != nil {
+		return m.IsWaiting
+	}
+	return false
+}
+
+func (m *ReplyPBGameByRound) GetValue() int64 {
+	if m != nil {
+		return m.Value
+	}
+	return 0
+}
+
+func (m *ReplyPBGameByRound) GetPlayers() []*PBPlayer {
+	if m != nil {
+		return m.Players
+	}
+	return nil
+}
+
+func (m *ReplyPBGameByRound) GetReturn() int64 {
+	if m != nil {
+		return m.Return
+	}
+	return 0
+}
+
 type ReceiptPBGame struct {
 	GameId               string   `protobuf:"bytes,1,opt,name=gameId,proto3" json:"gameId,omitempty"`
 	Status               int32    `protobuf:"varint,2,opt,name=status,proto3" json:"status,omitempty"`
@@ -1218,6 +1511,7 @@ type ReceiptPBGame struct {
 	IsWaiting            bool     `protobuf:"varint,8,opt,name=isWaiting,proto3" json:"isWaiting,omitempty"`
 	Players              []string `protobuf:"bytes,9,rep,name=players,proto3" json:"players,omitempty"`
 	PreStatus            int32    `protobuf:"varint,10,opt,name=preStatus,proto3" json:"preStatus,omitempty"`
+	Round                int32    `protobuf:"varint,11,opt,name=round,proto3" json:"round,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1227,7 +1521,7 @@ func (m *ReceiptPBGame) Reset()         { *m = ReceiptPBGame{} }
 func (m *ReceiptPBGame) String() string { return proto.CompactTextString(m) }
 func (*ReceiptPBGame) ProtoMessage()    {}
 func (*ReceiptPBGame) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8d22e4ee2313e311, []int{18}
+	return fileDescriptor_8d22e4ee2313e311, []int{22}
 }
 
 func (m *ReceiptPBGame) XXX_Unmarshal(b []byte) error {
@@ -1318,6 +1612,13 @@ func (m *ReceiptPBGame) GetPreStatus() int32 {
 	return 0
 }
 
+func (m *ReceiptPBGame) GetRound() int32 {
+	if m != nil {
+		return m.Round
+	}
+	return 0
+}
+
 type PBStartTxReq struct {
 	Value                int64    `protobuf:"varint,1,opt,name=value,proto3" json:"value,omitempty"`
 	PlayerNum            int32    `protobuf:"varint,2,opt,name=playerNum,proto3" json:"playerNum,omitempty"`
@@ -1331,7 +1632,7 @@ func (m *PBStartTxReq) Reset()         { *m = PBStartTxReq{} }
 func (m *PBStartTxReq) String() string { return proto.CompactTextString(m) }
 func (*PBStartTxReq) ProtoMessage()    {}
 func (*PBStartTxReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8d22e4ee2313e311, []int{19}
+	return fileDescriptor_8d22e4ee2313e311, []int{23}
 }
 
 func (m *PBStartTxReq) XXX_Unmarshal(b []byte) error {
@@ -1385,7 +1686,7 @@ func (m *PBContinueTxReq) Reset()         { *m = PBContinueTxReq{} }
 func (m *PBContinueTxReq) String() string { return proto.CompactTextString(m) }
 func (*PBContinueTxReq) ProtoMessage()    {}
 func (*PBContinueTxReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8d22e4ee2313e311, []int{20}
+	return fileDescriptor_8d22e4ee2313e311, []int{24}
 }
 
 func (m *PBContinueTxReq) XXX_Unmarshal(b []byte) error {
@@ -1432,7 +1733,7 @@ func (m *PBQuitTxReq) Reset()         { *m = PBQuitTxReq{} }
 func (m *PBQuitTxReq) String() string { return proto.CompactTextString(m) }
 func (*PBQuitTxReq) ProtoMessage()    {}
 func (*PBQuitTxReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8d22e4ee2313e311, []int{21}
+	return fileDescriptor_8d22e4ee2313e311, []int{25}
 }
 
 func (m *PBQuitTxReq) XXX_Unmarshal(b []byte) error {
@@ -1479,7 +1780,7 @@ func (m *PBQueryReq) Reset()         { *m = PBQueryReq{} }
 func (m *PBQueryReq) String() string { return proto.CompactTextString(m) }
 func (*PBQueryReq) ProtoMessage()    {}
 func (*PBQueryReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8d22e4ee2313e311, []int{22}
+	return fileDescriptor_8d22e4ee2313e311, []int{26}
 }
 
 func (m *PBQueryReq) XXX_Unmarshal(b []byte) error {
@@ -1525,14 +1826,18 @@ func init() {
 	proto.RegisterType((*PBGameContinue)(nil), "types.PBGameContinue")
 	proto.RegisterType((*PBGameQuit)(nil), "types.PBGameQuit")
 	proto.RegisterType((*PBGameQuery)(nil), "types.PBGameQuery")
+	proto.RegisterType((*PBGamePlay)(nil), "types.PBGamePlay")
 	proto.RegisterType((*QueryPBGameListByStatusAndPlayerNum)(nil), "types.QueryPBGameListByStatusAndPlayerNum")
 	proto.RegisterType((*PBGameRecord)(nil), "types.PBGameRecord")
 	proto.RegisterType((*PBGameIndexRecord)(nil), "types.PBGameIndexRecord")
 	proto.RegisterType((*PBGameRecords)(nil), "types.PBGameRecords")
+	proto.RegisterType((*PBGameIndexRecords)(nil), "types.PBGameIndexRecords")
 	proto.RegisterType((*QueryPBGameInfo)(nil), "types.QueryPBGameInfo")
 	proto.RegisterType((*ReplyPBGame)(nil), "types.ReplyPBGame")
 	proto.RegisterType((*QueryPBGameInfos)(nil), "types.QueryPBGameInfos")
 	proto.RegisterType((*ReplyPBGameList)(nil), "types.ReplyPBGameList")
+	proto.RegisterType((*QueryPBGameByRound)(nil), "types.QueryPBGameByRound")
+	proto.RegisterType((*ReplyPBGameByRound)(nil), "types.ReplyPBGameByRound")
 	proto.RegisterType((*ReceiptPBGame)(nil), "types.ReceiptPBGame")
 	proto.RegisterType((*PBStartTxReq)(nil), "types.PBStartTxReq")
 	proto.RegisterType((*PBContinueTxReq)(nil), "types.PBContinueTxReq")
@@ -1543,211 +1848,73 @@ func init() {
 func init() { proto.RegisterFile("pokerbull.proto", fileDescriptor_8d22e4ee2313e311) }
 
 var fileDescriptor_8d22e4ee2313e311 = []byte{
-	// 984 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x56, 0xdd, 0x6e, 0xe3, 0x44,
-	0x14, 0xae, 0xe3, 0x38, 0x3f, 0xc7, 0xdb, 0xa4, 0x1d, 0xa0, 0xb2, 0x2a, 0x84, 0x22, 0x6f, 0x59,
-	0x02, 0x5a, 0x7a, 0x91, 0x22, 0xd0, 0x0a, 0x09, 0x29, 0xe1, 0x82, 0x56, 0x5a, 0xa1, 0x74, 0x5a,
-	0xb4, 0xd7, 0xde, 0x78, 0xb6, 0x6b, 0xad, 0xeb, 0xa4, 0xf6, 0xb8, 0xdb, 0xdc, 0xf2, 0x06, 0x3c,
-	0x01, 0x17, 0x3c, 0x17, 0xcf, 0xc1, 0x2d, 0x9a, 0x73, 0x66, 0xfc, 0xb7, 0x8e, 0xa0, 0x7b, 0x37,
-	0xe7, 0x67, 0xce, 0x7c, 0xe7, 0x7f, 0x60, 0xbc, 0x59, 0xbf, 0x13, 0xe9, 0xeb, 0x3c, 0x8e, 0x4f,
-	0x37, 0xe9, 0x5a, 0xae, 0x99, 0x23, 0xb7, 0x1b, 0x91, 0x1d, 0x1f, 0xca, 0x34, 0x48, 0xb2, 0x60,
-	0x25, 0xa3, 0x75, 0x42, 0x12, 0xff, 0x1f, 0x1b, 0x86, 0x4b, 0xa5, 0xbd, 0xc8, 0xe3, 0x98, 0x1d,
-	0x41, 0xef, 0x26, 0xb8, 0x15, 0x17, 0xa1, 0x67, 0x4d, 0xac, 0xe9, 0x90, 0x6b, 0x4a, 0xf1, 0x33,
-	0x19, 0xc8, 0x3c, 0xf3, 0x3a, 0x13, 0x6b, 0xea, 0x70, 0x4d, 0xb1, 0xcf, 0x61, 0x98, 0xc9, 0x20,
-	0x95, 0xd7, 0xd1, 0xad, 0xf0, 0xec, 0x89, 0x35, 0xb5, 0x79, 0xc9, 0x60, 0x13, 0x70, 0x89, 0x78,
-	0x38, 0x0f, 0xb2, 0xb7, 0x5e, 0x17, 0x4d, 0x56, 0x59, 0xec, 0x53, 0x70, 0xee, 0x83, 0x38, 0x17,
-	0x9e, 0x83, 0x77, 0x89, 0x60, 0x27, 0xe0, 0xa0, 0x03, 0x5e, 0x6f, 0x62, 0x4d, 0xdd, 0xd9, 0xe8,
-	0x14, 0xd1, 0x9f, 0x2e, 0x17, 0x08, 0x94, 0x93, 0x90, 0x7d, 0x0d, 0xfd, 0x4d, 0x1c, 0x6c, 0x45,
-	0x9a, 0x79, 0xfd, 0x89, 0x3d, 0x75, 0x67, 0xe3, 0x52, 0x0f, 0xf9, 0xdc, 0xc8, 0x15, 0x4c, 0x3a,
-	0xfe, 0x9a, 0xdf, 0x7a, 0x03, 0xf4, 0xa0, 0x64, 0x28, 0x43, 0xa9, 0xc8, 0xf2, 0x58, 0x66, 0xde,
-	0xb0, 0x61, 0x88, 0x23, 0x9f, 0x1b, 0xb9, 0xc2, 0x1b, 0x25, 0xa1, 0x78, 0xf0, 0x80, 0xf0, 0x22,
-	0x81, 0xe6, 0x53, 0x71, 0x7f, 0x81, 0x12, 0x97, 0xa2, 0x50, 0x30, 0xd8, 0x31, 0x0c, 0xee, 0xf2,
-	0x88, 0x42, 0xf4, 0x04, 0x85, 0x05, 0xcd, 0xbe, 0x00, 0xc0, 0x33, 0x05, 0x68, 0x1f, 0x03, 0x54,
-	0xe1, 0x28, 0x79, 0x28, 0x82, 0x58, 0xa4, 0xf3, 0x30, 0x4c, 0xbd, 0x11, 0xc9, 0x4b, 0x8e, 0x7a,
-	0x39, 0xca, 0x5e, 0x05, 0x91, 0x8c, 0x92, 0x1b, 0x6f, 0x3c, 0xb1, 0xa6, 0x03, 0x5e, 0x32, 0x34,
-	0xae, 0x2b, 0x4a, 0xdc, 0x81, 0x76, 0xdb, 0x30, 0xfc, 0xdf, 0x2d, 0xe8, 0x2d, 0x17, 0xe7, 0x41,
-	0x12, 0x2a, 0xb7, 0x56, 0x41, 0x1a, 0x66, 0x9e, 0x35, 0xb1, 0xa7, 0x0e, 0x27, 0x42, 0x25, 0x9d,
-	0xfc, 0x36, 0x49, 0x27, 0x8a, 0x79, 0xd0, 0x0f, 0xc2, 0x30, 0x15, 0x59, 0x86, 0x29, 0x1f, 0x72,
-	0x43, 0x62, 0x78, 0xb2, 0x57, 0x51, 0x82, 0xa9, 0x1e, 0x70, 0x22, 0x54, 0x00, 0x62, 0x71, 0x2f,
-	0xd2, 0xe0, 0x86, 0xf2, 0xec, 0xf0, 0x82, 0xf6, 0xdf, 0xc3, 0xc0, 0xa4, 0x8b, 0x3d, 0x05, 0xe7,
-	0x6d, 0x90, 0x68, 0x14, 0xee, 0x6c, 0xbf, 0xc8, 0x82, 0xc2, 0xc8, 0x49, 0x56, 0x7d, 0xbc, 0x53,
-	0x7f, 0xfc, 0x08, 0x7a, 0x92, 0xe2, 0x48, 0x85, 0xa8, 0x29, 0x05, 0x2a, 0x15, 0x41, 0xb8, 0x35,
-	0xa0, 0x90, 0xf0, 0xff, 0xb2, 0xd4, 0xcb, 0x94, 0xdf, 0xff, 0xf7, 0xf2, 0x11, 0xf4, 0xde, 0x47,
-	0x49, 0x22, 0x52, 0xfd, 0xb0, 0xa6, 0x6a, 0xee, 0xd9, 0x75, 0xf7, 0xd4, 0x1d, 0xca, 0x96, 0x2e,
-	0x7e, 0x4d, 0xb1, 0x67, 0x30, 0xa2, 0xd3, 0xcb, 0x7a, 0x60, 0x1a, 0x5c, 0xff, 0x05, 0xf4, 0x75,
-	0xd5, 0xef, 0xc8, 0x91, 0x07, 0xfd, 0xcd, 0x3a, 0x4a, 0xa4, 0x46, 0xe5, 0x70, 0x43, 0xfa, 0x7f,
-	0x5b, 0xf0, 0x64, 0xb9, 0xf8, 0x25, 0xb8, 0x15, 0x73, 0xec, 0x77, 0xf6, 0x0d, 0x38, 0xd8, 0x7a,
-	0xd8, 0xda, 0xee, 0x8c, 0x15, 0x4e, 0x2a, 0x9d, 0x2b, 0x25, 0x39, 0xdf, 0xe3, 0xa4, 0xc2, 0xce,
-	0x60, 0xb0, 0x5a, 0x27, 0x32, 0x4a, 0x72, 0x81, 0x76, 0xdd, 0xd9, 0x67, 0x35, 0xf5, 0x9f, 0xb5,
-	0xf0, 0x7c, 0x8f, 0x17, 0x8a, 0xec, 0x2b, 0xe8, 0xaa, 0xd2, 0xc5, 0x20, 0xb8, 0xb3, 0xc3, 0xda,
-	0x85, 0xcb, 0x3c, 0x52, 0xe6, 0x51, 0x41, 0x21, 0xb9, 0xcb, 0x45, 0x4a, 0x19, 0x69, 0x22, 0xb9,
-	0x54, 0x12, 0x85, 0x04, 0x55, 0xd8, 0x08, 0x3a, 0x72, 0x8b, 0xed, 0xe6, 0xf0, 0x8e, 0xdc, 0x2e,
-	0xfa, 0x7a, 0x62, 0xf8, 0x73, 0x70, 0x2b, 0xd0, 0xcb, 0x49, 0x62, 0x55, 0x27, 0x49, 0xad, 0xf1,
-	0x3b, 0x8d, 0xc6, 0xf7, 0xa7, 0x30, 0xaa, 0xbb, 0xb3, 0x6b, 0xfe, 0xf9, 0x27, 0x00, 0xa5, 0x1f,
-	0x3b, 0xb5, 0xbe, 0x34, 0x90, 0xd0, 0x87, 0x9d, 0x6a, 0x77, 0xf0, 0x14, 0x15, 0x48, 0xf7, 0x65,
-	0x94, 0xc9, 0xc5, 0x96, 0x7a, 0x72, 0x9e, 0x84, 0xcb, 0x62, 0x2c, 0x95, 0x33, 0xd7, 0x6a, 0xce,
-	0xdc, 0xdd, 0x3e, 0x95, 0x13, 0xca, 0xae, 0x4c, 0x28, 0xff, 0xda, 0xd4, 0x02, 0x17, 0xab, 0x75,
-	0x1a, 0x3e, 0x7a, 0xce, 0xb7, 0x5b, 0x9d, 0xc3, 0x21, 0x59, 0xc5, 0x41, 0xf7, 0x1f, 0xa6, 0x0b,
-	0x13, 0x9d, 0xaa, 0x89, 0x9f, 0x60, 0xbf, 0x0a, 0x2c, 0x63, 0xdf, 0xaa, 0x61, 0x8c, 0x47, 0xdd,
-	0x8c, 0x9f, 0xd4, 0xaa, 0x83, 0xd4, 0xb8, 0xd1, 0xf1, 0xdf, 0xc1, 0xb8, 0x12, 0xcb, 0x8b, 0xe4,
-	0xcd, 0x7a, 0x27, 0x00, 0x06, 0x5d, 0x35, 0x2a, 0x74, 0xf7, 0xe2, 0xb9, 0xe2, 0xaf, 0xdd, 0xee,
-	0x6f, 0xb7, 0x0a, 0xf6, 0x0c, 0x5c, 0x2e, 0x36, 0xb1, 0x7e, 0x8c, 0x9d, 0x40, 0x57, 0x99, 0xd6,
-	0xfd, 0x74, 0x60, 0x70, 0x9a, 0x65, 0xca, 0x51, 0xea, 0x3f, 0x87, 0x83, 0x06, 0x42, 0xec, 0x5a,
-	0x02, 0x45, 0x4e, 0x0e, 0xb9, 0x21, 0xfd, 0x17, 0x30, 0xae, 0x3c, 0xa1, 0x6a, 0x83, 0x3d, 0x03,
-	0x47, 0x49, 0x4d, 0x3c, 0x3e, 0x7c, 0x87, 0xc4, 0xfe, 0x1f, 0x1d, 0xd8, 0xe7, 0x62, 0x25, 0xa2,
-	0x8d, 0xd4, 0x00, 0x1f, 0x9b, 0x65, 0x13, 0x21, 0xbb, 0x12, 0xa1, 0xd6, 0x48, 0xd4, 0x37, 0x9e,
-	0xd3, 0xdc, 0x78, 0xb5, 0x0a, 0xed, 0xb5, 0x54, 0x28, 0x75, 0x6a, 0xbf, 0xd1, 0xa9, 0xe5, 0x26,
-	0x1b, 0x34, 0x37, 0x99, 0x57, 0xee, 0xfa, 0x21, 0x05, 0xac, 0xba, 0xda, 0x8b, 0x1d, 0x07, 0xcd,
-	0x1d, 0x87, 0x75, 0x7f, 0x45, 0x1f, 0x0e, 0x2e, 0xee, 0x3e, 0x66, 0x4a, 0xb0, 0x03, 0xb0, 0xdf,
-	0x08, 0xf3, 0xbb, 0x51, 0x47, 0xff, 0x47, 0x18, 0x2f, 0x17, 0x66, 0x66, 0x90, 0xe1, 0x5d, 0xa1,
-	0xd6, 0x97, 0x3b, 0xe5, 0xe5, 0x1f, 0xd4, 0x90, 0xb8, 0xc4, 0x15, 0xff, 0xb8, 0x8b, 0xdf, 0xab,
-	0x19, 0x84, 0xa5, 0xf4, 0xa8, 0x7b, 0xb3, 0x3f, 0x2d, 0x18, 0x16, 0xff, 0x41, 0x76, 0x0a, 0x0e,
-	0x0d, 0xcc, 0x96, 0xf9, 0x7f, 0x6c, 0x3e, 0x3e, 0xbf, 0x25, 0x59, 0x74, 0x93, 0x5c, 0x3f, 0xf8,
-	0x7b, 0xec, 0x3b, 0x18, 0x14, 0xd3, 0xb1, 0x7d, 0x07, 0xb4, 0xdd, 0x7a, 0x0e, 0x5d, 0x9c, 0x94,
-	0x1f, 0x2e, 0x81, 0x16, 0xed, 0xd7, 0x3d, 0xfc, 0x8a, 0x9e, 0xfd, 0x1b, 0x00, 0x00, 0xff, 0xff,
-	0x0c, 0xc9, 0x5f, 0x3c, 0xb7, 0x0a, 0x00, 0x00,
-}
-
-// Reference imports to suppress errors if they are not otherwise used.
-var _ context.Context
-var _ grpc.ClientConn
-
-// This is a compile-time assertion to ensure that this generated file
-// is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion4
-
-// PokerbullClient is the client API for Pokerbull service.
-//
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
-type PokerbullClient interface {
-	//游戏开始
-	Start(ctx context.Context, in *PBGameStart, opts ...grpc.CallOption) (*types.UnsignTx, error)
-	//游戏继续
-	Continue(ctx context.Context, in *PBGameContinue, opts ...grpc.CallOption) (*types.UnsignTx, error)
-	//游戏结束
-	Quit(ctx context.Context, in *PBGameQuit, opts ...grpc.CallOption) (*types.UnsignTx, error)
-}
-
-type pokerbullClient struct {
-	cc *grpc.ClientConn
-}
-
-func NewPokerbullClient(cc *grpc.ClientConn) PokerbullClient {
-	return &pokerbullClient{cc}
-}
-
-func (c *pokerbullClient) Start(ctx context.Context, in *PBGameStart, opts ...grpc.CallOption) (*types.UnsignTx, error) {
-	out := new(types.UnsignTx)
-	err := c.cc.Invoke(ctx, "/types.pokerbull/Start", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *pokerbullClient) Continue(ctx context.Context, in *PBGameContinue, opts ...grpc.CallOption) (*types.UnsignTx, error) {
-	out := new(types.UnsignTx)
-	err := c.cc.Invoke(ctx, "/types.pokerbull/Continue", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *pokerbullClient) Quit(ctx context.Context, in *PBGameQuit, opts ...grpc.CallOption) (*types.UnsignTx, error) {
-	out := new(types.UnsignTx)
-	err := c.cc.Invoke(ctx, "/types.pokerbull/Quit", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// PokerbullServer is the server API for Pokerbull service.
-type PokerbullServer interface {
-	//游戏开始
-	Start(context.Context, *PBGameStart) (*types.UnsignTx, error)
-	//游戏继续
-	Continue(context.Context, *PBGameContinue) (*types.UnsignTx, error)
-	//游戏结束
-	Quit(context.Context, *PBGameQuit) (*types.UnsignTx, error)
-}
-
-func RegisterPokerbullServer(s *grpc.Server, srv PokerbullServer) {
-	s.RegisterService(&_Pokerbull_serviceDesc, srv)
-}
-
-func _Pokerbull_Start_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PBGameStart)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PokerbullServer).Start(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/types.pokerbull/Start",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PokerbullServer).Start(ctx, req.(*PBGameStart))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Pokerbull_Continue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PBGameContinue)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PokerbullServer).Continue(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/types.pokerbull/Continue",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PokerbullServer).Continue(ctx, req.(*PBGameContinue))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Pokerbull_Quit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PBGameQuit)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PokerbullServer).Quit(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/types.pokerbull/Quit",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PokerbullServer).Quit(ctx, req.(*PBGameQuit))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-var _Pokerbull_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "types.pokerbull",
-	HandlerType: (*PokerbullServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "Start",
-			Handler:    _Pokerbull_Start_Handler,
-		},
-		{
-			MethodName: "Continue",
-			Handler:    _Pokerbull_Continue_Handler,
-		},
-		{
-			MethodName: "Quit",
-			Handler:    _Pokerbull_Quit_Handler,
-		},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "pokerbull.proto",
+	// 1081 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x57, 0x4f, 0x6f, 0xe3, 0x44,
+	0x14, 0x5f, 0xdb, 0xb1, 0x93, 0x3c, 0x6f, 0x9b, 0x76, 0x80, 0x6a, 0x84, 0x10, 0x8a, 0xbc, 0x65,
+	0x37, 0x20, 0xe8, 0x21, 0x95, 0x40, 0x2b, 0x24, 0xa4, 0x86, 0x03, 0xa9, 0xb4, 0x42, 0xe9, 0x74,
+	0xa5, 0x3d, 0x7b, 0xe3, 0xd9, 0xd6, 0xac, 0xe3, 0xa4, 0xfe, 0x53, 0x36, 0x5f, 0x80, 0x1b, 0x47,
+	0xee, 0x48, 0x1c, 0xf8, 0x62, 0x7c, 0x10, 0x34, 0x6f, 0x66, 0xec, 0xb1, 0x1b, 0xab, 0x84, 0x9b,
+	0xdf, 0x9f, 0x79, 0xf3, 0x7b, 0x6f, 0xde, 0xfc, 0xde, 0x18, 0x46, 0x9b, 0xf5, 0x7b, 0x9e, 0xbd,
+	0x2d, 0x93, 0xe4, 0x6c, 0x93, 0xad, 0x8b, 0x35, 0x71, 0x8b, 0xed, 0x86, 0xe7, 0xc1, 0xef, 0x3d,
+	0x18, 0x2e, 0x84, 0x69, 0x56, 0x26, 0x09, 0x39, 0x01, 0xef, 0x26, 0x5c, 0xf1, 0xcb, 0x88, 0x5a,
+	0x63, 0x6b, 0x32, 0x64, 0x4a, 0x12, 0xfa, 0xbc, 0x08, 0x8b, 0x32, 0xa7, 0xf6, 0xd8, 0x9a, 0xb8,
+	0x4c, 0x49, 0xe4, 0x33, 0x18, 0xe6, 0x45, 0x98, 0x15, 0xaf, 0xe3, 0x15, 0xa7, 0x0e, 0x2e, 0xa9,
+	0x15, 0x64, 0x0c, 0xbe, 0x14, 0x3e, 0xcc, 0xc3, 0xfc, 0x96, 0xf6, 0xd0, 0x6e, 0xaa, 0xc8, 0xc7,
+	0xe0, 0xde, 0x87, 0x49, 0xc9, 0xa9, 0x3b, 0xb6, 0x26, 0x0e, 0x93, 0x02, 0x39, 0x05, 0x17, 0xd1,
+	0x52, 0x6f, 0x6c, 0x4d, 0xfc, 0xe9, 0xe1, 0x19, 0x42, 0x3d, 0x5b, 0xcc, 0x10, 0x28, 0x93, 0x46,
+	0xf2, 0x25, 0xf4, 0x37, 0x49, 0xb8, 0xe5, 0x59, 0x4e, 0xfb, 0x63, 0x67, 0xe2, 0x4f, 0x47, 0xb5,
+	0x1f, 0xea, 0x99, 0xb6, 0x0b, 0x98, 0xf2, 0xf3, 0xe7, 0x72, 0x45, 0x07, 0x98, 0x41, 0xad, 0x10,
+	0x81, 0x32, 0x9e, 0x97, 0x49, 0x91, 0xd3, 0x61, 0x2b, 0x10, 0x43, 0x3d, 0xd3, 0x76, 0x81, 0x37,
+	0x4e, 0x23, 0xfe, 0x81, 0x82, 0xc4, 0x8b, 0x02, 0x86, 0xcf, 0xf8, 0xfd, 0x25, 0x5a, 0x7c, 0xb4,
+	0xd4, 0x0a, 0xf2, 0x29, 0x0c, 0xee, 0xca, 0x58, 0x96, 0xe8, 0x29, 0x96, 0xa0, 0x92, 0xc9, 0xe7,
+	0x00, 0xf8, 0x2d, 0x0b, 0x74, 0x80, 0x56, 0x43, 0x23, 0xec, 0x11, 0x0f, 0x13, 0x9e, 0x5d, 0x44,
+	0x51, 0x46, 0x0f, 0xa5, 0xbd, 0xd6, 0x88, 0x9d, 0xe3, 0xfc, 0x4d, 0x18, 0x17, 0x71, 0x7a, 0x43,
+	0x47, 0x63, 0x6b, 0x32, 0x60, 0xb5, 0x42, 0xe1, 0xba, 0x96, 0x07, 0x77, 0xa4, 0xd2, 0xd6, 0x0a,
+	0x91, 0x4b, 0xb6, 0x2e, 0xd3, 0x88, 0x1e, 0xa3, 0x45, 0x0a, 0xc1, 0x9f, 0x16, 0x78, 0x8b, 0xd9,
+	0x3c, 0x4c, 0x23, 0xe1, 0xb0, 0x0c, 0xb3, 0x28, 0xa7, 0xd6, 0xd8, 0x11, 0x0e, 0x28, 0x88, 0x56,
+	0x90, 0xd5, 0xd0, 0xad, 0x20, 0x25, 0x42, 0xa1, 0x1f, 0x46, 0x51, 0xc6, 0xf3, 0x5c, 0x35, 0x82,
+	0x16, 0xb1, 0x68, 0xf9, 0x9b, 0x38, 0xc5, 0x06, 0x18, 0x30, 0x29, 0x88, 0xb2, 0x24, 0xfc, 0x9e,
+	0x67, 0xe1, 0x8d, 0x3c, 0x7d, 0x97, 0x55, 0xb2, 0x00, 0x8e, 0x68, 0xb0, 0x66, 0x9e, 0x6c, 0xab,
+	0x4a, 0x11, 0xfc, 0x61, 0xc1, 0x40, 0x9f, 0x31, 0x79, 0x06, 0xee, 0x6d, 0x98, 0x2a, 0x90, 0xfe,
+	0xf4, 0xa0, 0x3a, 0x3a, 0x91, 0x02, 0x93, 0x36, 0x13, 0x9b, 0xdd, 0xc4, 0x76, 0x02, 0x5e, 0x21,
+	0x8b, 0xef, 0xe0, 0xb9, 0x29, 0x09, 0x8b, 0xc3, 0xc3, 0x68, 0xab, 0x31, 0xa3, 0x20, 0x70, 0xad,
+	0xc2, 0x62, 0x79, 0x8b, 0xb8, 0x5c, 0x89, 0xab, 0x52, 0x04, 0x7f, 0x21, 0x2e, 0xd9, 0x32, 0xff,
+	0x0d, 0xd7, 0x09, 0x78, 0xbf, 0xc6, 0x69, 0xca, 0x33, 0x05, 0x4b, 0x49, 0x8d, 0xda, 0x38, 0xad,
+	0xda, 0x9c, 0x80, 0x27, 0x1b, 0x40, 0xdd, 0x27, 0x25, 0x91, 0xe7, 0x70, 0x28, 0xbf, 0x5e, 0x35,
+	0xab, 0xda, 0xd2, 0x06, 0x2f, 0xa1, 0xaf, 0x2e, 0x52, 0xc7, 0x01, 0x53, 0xe8, 0x6f, 0xd6, 0x71,
+	0x5a, 0x28, 0x54, 0x2e, 0xd3, 0x62, 0xf0, 0x9b, 0x0d, 0x4f, 0x17, 0xb3, 0x9f, 0xc2, 0x15, 0xbf,
+	0x58, 0x16, 0xf1, 0x3a, 0x25, 0x5f, 0x81, 0x8b, 0xb7, 0x19, 0xd9, 0xc2, 0x9f, 0x92, 0x2a, 0x49,
+	0xe1, 0x73, 0x2d, 0x2c, 0xf3, 0x27, 0x4c, 0xba, 0x90, 0x73, 0x18, 0x2c, 0xd7, 0x69, 0x11, 0xa7,
+	0x25, 0xc7, 0xb8, 0xfe, 0xf4, 0x93, 0x86, 0xfb, 0x8f, 0xca, 0x38, 0x7f, 0xc2, 0x2a, 0x47, 0xf2,
+	0x02, 0x7a, 0xe2, 0x36, 0x60, 0x11, 0xfc, 0xe9, 0x71, 0x63, 0xc1, 0x55, 0x19, 0x8b, 0xf0, 0xe8,
+	0x20, 0x90, 0xdc, 0x95, 0x3c, 0x93, 0xe7, 0xd5, 0x46, 0x72, 0x25, 0x2c, 0x02, 0x09, 0xba, 0x88,
+	0xa0, 0xe2, 0xf2, 0x63, 0x7d, 0xda, 0x41, 0x45, 0x57, 0x89, 0xa0, 0xc2, 0x81, 0x1c, 0x82, 0x5d,
+	0x6c, 0xf1, 0xaa, 0xbb, 0xcc, 0x2e, 0xb6, 0xb3, 0xbe, 0x62, 0xab, 0xe0, 0x02, 0x7c, 0x23, 0xc7,
+	0x9a, 0xc5, 0x2c, 0x93, 0xc5, 0x1a, 0xa4, 0x63, 0xb7, 0x48, 0x27, 0x98, 0xc0, 0x61, 0x33, 0xef,
+	0x2e, 0xee, 0x0d, 0x4e, 0x01, 0xea, 0x84, 0x3b, 0xbd, 0xbe, 0xd0, 0x90, 0x30, 0xd9, 0x4e, 0xb7,
+	0x5f, 0x74, 0x30, 0x91, 0x68, 0x27, 0xdd, 0x57, 0xd4, 0x60, 0x1b, 0xd4, 0x50, 0xa7, 0xe9, 0x98,
+	0x69, 0x1a, 0x77, 0xab, 0x37, 0x76, 0x8c, 0xbb, 0x15, 0xdc, 0xc1, 0x33, 0x04, 0x23, 0x37, 0x7c,
+	0x15, 0xe7, 0xc5, 0x6c, 0x2b, 0xb9, 0xe7, 0x22, 0x8d, 0x16, 0x15, 0xfd, 0xd6, 0xb3, 0xc5, 0x6a,
+	0xcf, 0x96, 0xee, 0xfa, 0xd5, 0x4c, 0xec, 0x18, 0x4c, 0x1c, 0xbc, 0xd6, 0x0d, 0xca, 0xf8, 0x72,
+	0x9d, 0x45, 0x7b, 0xcf, 0xb3, 0xdd, 0x51, 0x2f, 0xe0, 0x58, 0x46, 0x45, 0x42, 0x7f, 0x24, 0x74,
+	0x15, 0xc2, 0x36, 0x43, 0xfc, 0x00, 0x07, 0x26, 0xb0, 0x9c, 0x7c, 0x23, 0x86, 0x0e, 0x7e, 0x2a,
+	0x86, 0xf8, 0xa8, 0xd1, 0x87, 0xd2, 0x8d, 0x69, 0x9f, 0x60, 0x0e, 0xe4, 0x01, 0x84, 0x9c, 0x4c,
+	0xdb, 0x41, 0x68, 0x23, 0x88, 0xe1, 0x5b, 0x47, 0x7a, 0x0f, 0x23, 0xe3, 0x54, 0x2e, 0xd3, 0x77,
+	0xeb, 0xce, 0x54, 0x08, 0xf4, 0xc4, 0x59, 0x2a, 0x72, 0xc2, 0x6f, 0xa3, 0x72, 0xce, 0xee, 0xca,
+	0xf5, 0xcc, 0xb4, 0xcf, 0xc1, 0x67, 0x7c, 0x93, 0xa8, 0xcd, 0xc8, 0x29, 0xf4, 0x44, 0x68, 0x45,
+	0x17, 0x47, 0x1a, 0xac, 0x7e, 0x7e, 0x30, 0xb4, 0x06, 0x5f, 0xc3, 0x51, 0x0b, 0x21, 0x92, 0x92,
+	0x04, 0x25, 0x33, 0x1d, 0x32, 0x2d, 0x06, 0x2f, 0x61, 0x64, 0x6c, 0x21, 0xba, 0x8c, 0x3c, 0x07,
+	0x57, 0x58, 0x75, 0x51, 0x1e, 0xee, 0x23, 0xcd, 0xc1, 0x0c, 0x88, 0xb1, 0xd1, 0x6c, 0xcb, 0xb0,
+	0xcd, 0xf7, 0xba, 0x14, 0xc1, 0x3f, 0x16, 0x10, 0x63, 0xff, 0xc7, 0x82, 0x74, 0x35, 0xde, 0x8b,
+	0x6a, 0xaa, 0x4a, 0xaa, 0x7b, 0xf0, 0x04, 0xd1, 0x63, 0xb6, 0x31, 0xf1, 0x7b, 0xed, 0x89, 0xbf,
+	0xfb, 0x3d, 0x65, 0xbc, 0x94, 0xbc, 0x47, 0x5e, 0x4a, 0x38, 0xdd, 0x8b, 0x32, 0x4b, 0x69, 0x5f,
+	0xce, 0x43, 0x29, 0x05, 0x7f, 0xdb, 0x70, 0xc0, 0xf8, 0x92, 0xc7, 0x9b, 0x42, 0x9d, 0xe5, 0xbe,
+	0x19, 0xea, 0x66, 0x72, 0x8c, 0x66, 0xda, 0xd9, 0x34, 0xcd, 0xe7, 0x94, 0xdb, 0x7e, 0x4e, 0x35,
+	0x68, 0xc1, 0xdb, 0x41, 0x0b, 0xb2, 0x00, 0xfd, 0x16, 0x15, 0xd7, 0x45, 0x1b, 0xb4, 0x8b, 0x46,
+	0xeb, 0xf2, 0x0c, 0x65, 0x6f, 0x99, 0xef, 0xc6, 0xea, 0x01, 0x05, 0x9d, 0x0f, 0x28, 0xdf, 0x6c,
+	0x08, 0xa4, 0xa0, 0x6b, 0xf9, 0xc6, 0x65, 0xfc, 0xee, 0xff, 0x0c, 0x07, 0x72, 0x04, 0xce, 0x3b,
+	0xae, 0x79, 0x56, 0x7c, 0x06, 0xdf, 0xc3, 0x68, 0x31, 0xd3, 0xa3, 0x42, 0x06, 0xee, 0x3a, 0x00,
+	0xb5, 0xd8, 0xae, 0x17, 0x7f, 0x27, 0x66, 0xc3, 0x15, 0xbe, 0x2a, 0xf7, 0x5b, 0xf8, 0xad, 0x98,
+	0x16, 0x78, 0x45, 0xf6, 0x5a, 0xf7, 0xd6, 0xc3, 0x5f, 0x8c, 0xf3, 0x7f, 0x03, 0x00, 0x00, 0xff,
+	0xff, 0xb4, 0x58, 0xec, 0xbf, 0x75, 0x0c, 0x00, 0x00,
 }

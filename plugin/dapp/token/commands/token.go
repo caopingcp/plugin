@@ -13,6 +13,7 @@ import (
 
 	"github.com/33cn/chain33/rpc/jsonclient"
 	rpctypes "github.com/33cn/chain33/rpc/types"
+	"github.com/33cn/chain33/system/dapp/commands"
 	"github.com/33cn/chain33/types"
 	tokenty "github.com/33cn/plugin/plugin/dapp/token/types"
 	"github.com/spf13/cobra"
@@ -40,6 +41,7 @@ func TokenCmd() *cobra.Command {
 		CreateRawTokenPreCreateTxCmd(),
 		CreateRawTokenFinishTxCmd(),
 		CreateRawTokenRevokeTxCmd(),
+		CreateTokenTransferExecCmd(),
 	)
 
 	return cmd
@@ -70,16 +72,35 @@ func addCreateTokenTransferFlags(cmd *cobra.Command) {
 }
 
 func createTokenTransfer(cmd *cobra.Command, args []string) {
-	toAddr, _ := cmd.Flags().GetString("to")
-	amount, _ := cmd.Flags().GetFloat64("amount")
-	note, _ := cmd.Flags().GetString("note")
-	symbol, _ := cmd.Flags().GetString("symbol")
-	txHex, err := CreateRawTx(cmd, toAddr, amount, note, false, symbol, "")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
+	commands.CreateAssetTransfer(cmd, args, tokenty.TokenX)
+}
+
+// CreateTokenTransferExecCmd create raw transfer tx
+func CreateTokenTransferExecCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "send_exec",
+		Short: "Create a token send to executor transaction",
+		Run:   createTokenSendToExec,
 	}
-	fmt.Println(txHex)
+	addCreateTokenSendToExecFlags(cmd)
+	return cmd
+}
+
+func addCreateTokenSendToExecFlags(cmd *cobra.Command) {
+	cmd.Flags().StringP("exec", "e", "", "receiver executor address")
+	cmd.MarkFlagRequired("exec")
+
+	cmd.Flags().Float64P("amount", "a", 0, "transaction amount")
+	cmd.MarkFlagRequired("amount")
+
+	cmd.Flags().StringP("note", "n", "", "transaction note info")
+
+	cmd.Flags().StringP("symbol", "s", "", "token symbol")
+	cmd.MarkFlagRequired("symbol")
+}
+
+func createTokenSendToExec(cmd *cobra.Command, args []string) {
+	commands.CreateAssetSendToExec(cmd, args, tokenty.TokenX)
 }
 
 // CreateTokenWithdrawCmd create raw withdraw tx
@@ -107,23 +128,7 @@ func addCreateTokenWithdrawFlags(cmd *cobra.Command) {
 }
 
 func createTokenWithdraw(cmd *cobra.Command, args []string) {
-	exec, _ := cmd.Flags().GetString("exec")
-	paraName, _ := cmd.Flags().GetString("paraName")
-	exec = getRealExecName(paraName, exec)
-	amount, _ := cmd.Flags().GetFloat64("amount")
-	note, _ := cmd.Flags().GetString("note")
-	symbol, _ := cmd.Flags().GetString("symbol")
-	execAddr, err := GetExecAddr(exec)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-	txHex, err := CreateRawTx(cmd, execAddr, amount, note, true, symbol, exec)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-	fmt.Println(txHex)
+	commands.CreateAssetWithdraw(cmd, args, tokenty.TokenX)
 }
 
 // GetTokensPreCreatedCmd get precreated tokens

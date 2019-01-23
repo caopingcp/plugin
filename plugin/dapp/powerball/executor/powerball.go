@@ -61,7 +61,7 @@ func (ball *Powerball) GetDriverName() string {
 func (ball *Powerball) findPowerballBuyRecords(key []byte) (*pty.PowerballBuyRecords, error) {
 
 	count := ball.GetLocalDB().PrefixCount(key)
-	pblog.Error("findPowerballBuyRecords", "count", count)
+	pblog.Info("findPowerballBuyRecords", "count", count)
 
 	values, err := ball.GetLocalDB().List(key, nil, int32(count), 0)
 	if err != nil {

@@ -20,7 +20,6 @@ func init() {
 }
 
 type subConfig struct {
-	ParaRemoteGrpcClient string `json:"paraRemoteGrpcClient"`
 }
 
 var cfg subConfig

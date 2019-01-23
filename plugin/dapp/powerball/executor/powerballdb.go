@@ -5,19 +5,15 @@
 package executor
 
 import (
-	"context"
 	"fmt"
-	"github.com/pkg/errors"
 	"strconv"
 
 	"github.com/33cn/chain33/account"
-	"github.com/33cn/chain33/client"
 	"github.com/33cn/chain33/common"
 	dbm "github.com/33cn/chain33/common/db"
 	"github.com/33cn/chain33/system/dapp"
 	"github.com/33cn/chain33/types"
 	pty "github.com/33cn/plugin/plugin/dapp/powerball/types"
-	"google.golang.org/grpc"
 )
 
 // ball number and range
@@ -148,27 +144,19 @@ type Action struct {
 	height       int64
 	execaddr     string
 	difficulty   uint64
-	api          client.QueueProtocolAPI
-	conn         *grpc.ClientConn
-	grpcClient   types.Chain33Client
 	index        int
+	powerball	*Powerball
 }
 
 // NewPowerballAction method
 func NewPowerballAction(l *Powerball, tx *types.Transaction, index int) *Action {
 	hash := tx.Hash()
 	fromaddr := tx.From()
-
-	msgRecvOp := grpc.WithMaxMsgSize(grpcRecSize)
-	conn, err := grpc.Dial(cfg.ParaRemoteGrpcClient, grpc.WithInsecure(), msgRecvOp)
-
-	if err != nil {
-		panic(err)
-	}
-	grpcClient := types.NewChain33Client(conn)
-
-	return &Action{l.GetCoinsAccount(), l.GetStateDB(), hash, fromaddr, l.GetBlockTime(),
-		l.GetHeight(), dapp.ExecAddress(string(tx.Execer)), l.GetDifficulty(), l.GetAPI(), conn, grpcClient, index}
+	return &Action{
+		coinsAccount: l.GetCoinsAccount(), db: l.GetStateDB(),
+		txhash: hash, fromaddr: fromaddr, blocktime: l.GetBlockTime(),
+		height: l.GetHeight(), execaddr: dapp.ExecAddress(string(tx.Execer)),
+		difficulty: l.GetDifficulty(), index: index, powerball: l}
 }
 
 // GetReceiptLog method
@@ -218,7 +206,7 @@ func (action *Action) PowerballCreate(create *pty.PowerballCreate) (*types.Recei
 
 	powerballID := common.ToHex(action.txhash)
 
-	if !isRightCreator(action.fromaddr, action.db, true) {
+	if !isRightCreator(action.fromaddr, action.db, false) {
 		return nil, pty.ErrNoPrivilege
 	}
 
@@ -232,7 +220,7 @@ func (action *Action) PowerballCreate(create *pty.PowerballCreate) (*types.Recei
 		create.GetDrawTime(), create.GetTicketPrice(), create.GetPlatformRatio(), create.GetDevelopRatio(), action.height, action.fromaddr)
 
 	if types.IsPara() {
-		mainHeight := action.GetMainHeightByTxHash(action.txhash)
+		mainHeight := action.powerball.GetMainHeight()
 		if mainHeight < 0 {
 			pblog.Error("PowerballCreate", "mainHeight", mainHeight)
 			return nil, pty.ErrPowerballStatus
@@ -287,7 +275,7 @@ func (action *Action) PowerballBuy(buy *pty.PowerballBuy) (*types.Receipt, error
 		ball.Round++
 		ball.LuckyNumber = nil
 		if types.IsPara() {
-			mainHeight := action.GetMainHeightByTxHash(action.txhash)
+			mainHeight := action.powerball.GetMainHeight()
 			if mainHeight < 0 {
 				pblog.Error("PowerballBuy", "mainHeight", mainHeight)
 				return nil, pty.ErrPowerballStatus
@@ -412,7 +400,7 @@ func (action *Action) PowerballPause(pause *pty.PowerballPause) (*types.Receipt,
 	}
 
 	if types.IsPara() {
-		mainHeight := action.GetMainHeightByTxHash(action.txhash)
+		mainHeight := action.powerball.GetMainHeight()
 		if mainHeight < 0 {
 			pblog.Error("PowerballPause", "mainHeight", mainHeight)
 			return nil, pty.ErrPowerballStatus
@@ -552,7 +540,12 @@ func (action *Action) findLuckyNum(isSolo bool, ball *PowerballDB) *pty.BallNumb
 		//used for internal verfiy
 		numStr = []string{"01", "02", "03", "04", "05", "06", "07"}
 	} else {
-		modify, err := action.getRandHash()
+		param := &types.ReqRandHash{
+			ExecName: "ticket",
+			BlockNum: blockNum,
+			Hash:     action.powerball.GetLastHash(),
+		}
+		modify, err := action.powerball.GetExecutorAPI().GetRandNum(param)
 		if err != nil {
 			pblog.Error("findLuckyNum", "err", err)
 			return nil
@@ -572,32 +565,6 @@ func (action *Action) findLuckyNum(isSolo bool, ball *PowerballDB) *pty.BallNumb
 		numStr = append(numStr, blueStr...)
 	}
 	return &pty.BallNumber{Balls: numStr}
-}
-
-func (action *Action) getRandHash() ([]byte, error) {
-	//在主链上，当前高度查询不到，如果要保证区块个数，高度传入action.height-1
-	if !types.IsPara() {
-		req := &types.ReqRandHash{ExecName: "ticket", Height: action.height - 1, BlockNum: blockNum}
-		msg, err := action.api.Query("ticket", "RandNumHash", req)
-		if err != nil {
-			return nil, err
-		}
-		reply := msg.(*types.ReplyHash)
-		return reply.Hash, nil
-	}
-
-	mainHeight := action.GetMainHeightByTxHash(action.txhash)
-	if mainHeight < 0 {
-		pblog.Error("getRandHash", "mainHeight", mainHeight)
-		return nil, errors.New("wrong height in mainchain")
-	}
-	req := &types.ReqRandHash{ExecName: "ticket", Height: mainHeight, BlockNum: blockNum}
-	reply, err := action.grpcClient.QueryRandNum(context.Background(), req)
-	if err != nil {
-		return nil, err
-	}
-	return reply.Hash, nil
-
 }
 
 func genSeeds(modify []byte, count int) ([]uint64, error) {
@@ -778,7 +745,7 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 	action.recordMissing(ball)
 
 	if types.IsPara() {
-		mainHeight := action.GetMainHeightByTxHash(action.txhash)
+		mainHeight := action.powerball.GetMainHeight()
 		if mainHeight < 0 {
 			pblog.Error("PowerballBuy", "mainHeight", mainHeight)
 			return nil, nil, pty.ErrPowerballStatus

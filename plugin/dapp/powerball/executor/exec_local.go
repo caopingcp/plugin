@@ -18,21 +18,23 @@ func (l *Powerball) execLocal(tx *types.Transaction, receipt *types.ReceiptData)
 	for _, item := range receipt.Logs {
 		switch item.Ty {
 		case pty.TyLogPowerballCreate, pty.TyLogPowerballBuy, pty.TyLogPowerballPause, pty.TyLogPowerballDraw, pty.TyLogPowerballClose:
-			var powerballlog pty.ReceiptPowerball
-			err := types.Decode(item.Log, &powerballlog)
+			var powerlog pty.ReceiptPowerball
+			err := types.Decode(item.Log, &powerlog)
 			if err != nil {
 				return nil, err
 			}
-			kv := l.savePowerball(&powerballlog)
+			kv := l.savePowerball(&powerlog)
 			set.KV = append(set.KV, kv...)
 
 			if item.Ty == pty.TyLogPowerballBuy {
-				kv := l.savePowerballBuy(&powerballlog)
+				kv := l.savePowerballBuy(&powerlog)
 				set.KV = append(set.KV, kv...)
 			} else if item.Ty == pty.TyLogPowerballDraw {
-				kv := l.savePowerballDraw(&powerballlog)
+				kv := l.savePowerballDraw(&powerlog)
 				set.KV = append(set.KV, kv...)
-				kv = l.updatePowerballBuy(&powerballlog, true)
+				kv = l.updatePowerballBuy(&powerlog, true)
+				set.KV = append(set.KV, kv...)
+				kv = l.savePowerballGain(&powerlog)
 				set.KV = append(set.KV, kv...)
 			}
 		}

@@ -38,6 +38,7 @@ message Powerball {
     int64                        ticketPrice                = 19;
     int64                        platformRatio              = 20;
     int64                        developRatio               = 21;
+    int64                        totalAddrNum               = 22;
 }
 
 message BallNumber {
@@ -68,9 +69,9 @@ message PowerballCreate {
 }
 
 message PowerballBuy {
-    string powerballID = 1;
-    int64  amount    = 2;
-    BallNumber  number    = 3;
+    string     powerballID = 1;
+    int64      amount      = 2;
+    BallNumber number      = 3;
 }
 
 message PowerballPause {
@@ -86,7 +87,7 @@ message PowerballClose {
 }
 
 message ReceiptPowerball {
-    string               powerballID   = 1;
+    string               powerballID = 1;
     int32                status      = 2;
     int32                prevStatus  = 3;
     string               addr        = 4;
@@ -96,8 +97,11 @@ message ReceiptPowerball {
     BallNumber           luckyNumber = 8;
     int64                time        = 9;
     string               txHash      = 10;
-    PowerballUpdateBuyInfo updateInfo  = 11;
+    PowerballUpdateBuyInfo updateInfo = 11;
     int64                index       = 12;
+    int64                saleFund    = 13;
+    int64                totalAddrNum = 14;
+    PowerballGainInfos   gainInfos   = 15;
 }
 
 message ReqPowerballInfo {
@@ -155,6 +159,7 @@ message ReplyPowerballCurrentInfo {
     string   purTime                      = 11;
     string   drawTime                     = 12;
     repeated PowerMissingRecord missingRecords = 13;
+    int64    totalAddrNum                 = 14;
 }
 
 message ReplyPowerballHistoryLuckyNumber {
@@ -212,4 +217,39 @@ message PowerballUpdateBuyInfo {
 
 message ReplyPowerballPurchaseAddr {
     repeated string address = 1;
+}
+
+message PowerballGainInfos{
+    repeated PowerballGainInfo gains = 1;
+}
+
+message PowerballGainInfo{
+    string  addr       = 1;
+    int64   buyAmount  = 2;
+    int64   fundAmount = 3;
+}
+
+message ReqPowerballGainInfo {
+    string powerballID = 1;
+    string addr        = 2;
+    int64  round       = 3;
+}
+
+message PowerballGainRecord{
+    string  addr       = 1;
+    int64   buyAmount  = 2;
+    int64   fundAmount = 3;
+    int64   round      = 4;
+}
+
+message PowerballGainRecords {
+    repeated PowerballGainRecord records = 1;
+}
+
+message ReqPowerballGainHistory {
+    string powerballID = 1;
+    string addr        = 2;
+    int64  round       = 3;
+    int32  count       = 4;
+    int32  direction   = 5;
 }

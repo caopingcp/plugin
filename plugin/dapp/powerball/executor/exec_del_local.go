@@ -18,21 +18,23 @@ func (l *Powerball) execDelLocal(tx *types.Transaction, receiptData *types.Recei
 	for _, item := range receiptData.Logs {
 		switch item.Ty {
 		case pty.TyLogPowerballCreate, pty.TyLogPowerballBuy, pty.TyLogPowerballPause, pty.TyLogPowerballDraw, pty.TyLogPowerballClose:
-			var powerballlog pty.ReceiptPowerball
-			err := types.Decode(item.Log, &powerballlog)
+			var powerlog pty.ReceiptPowerball
+			err := types.Decode(item.Log, &powerlog)
 			if err != nil {
 				return nil, err
 			}
-			kv := l.deletePowerball(&powerballlog)
+			kv := l.deletePowerball(&powerlog)
 			set.KV = append(set.KV, kv...)
 
 			if item.Ty == pty.TyLogPowerballBuy {
-				kv := l.deletePowerballBuy(&powerballlog)
+				kv := l.deletePowerballBuy(&powerlog)
 				set.KV = append(set.KV, kv...)
 			} else if item.Ty == pty.TyLogPowerballDraw {
-				kv := l.deletePowerballDraw(&powerballlog)
+				kv := l.deletePowerballDraw(&powerlog)
 				set.KV = append(set.KV, kv...)
-				kv = l.updatePowerballBuy(&powerballlog, false)
+				kv = l.updatePowerballBuy(&powerlog, false)
+				set.KV = append(set.KV, kv...)
+				kv = l.deletePowerballGain(&powerlog)
 				set.KV = append(set.KV, kv...)
 			}
 		}

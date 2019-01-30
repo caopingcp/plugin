@@ -32,6 +32,16 @@ func calcPowerballDrawKey(powerballID string, round int64) []byte {
 }
 
 func calcPowerballKey(powerballID string, status int32) []byte {
-	key := fmt.Sprintf("LODB-powerball-:%d:%s", status, powerballID)
+	key := fmt.Sprintf("LODB-powerball-:%s:%d", powerballID, status)
+	return []byte(key)
+}
+
+func calcPowerballGainPrefix(powerballID string, addr string) []byte {
+	key := fmt.Sprintf("LODB-powerball-gain:%s:%s", powerballID, addr)
+	return []byte(key)
+}
+
+func calcPowerballGainKey(powerballID string, addr string, round int64) []byte {
+	key := fmt.Sprintf("LODB-powerball-gain:%s:%s:%10d", powerballID, addr, round)
 	return []byte(key)
 }

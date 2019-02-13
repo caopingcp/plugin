@@ -5,16 +5,11 @@
 package executor
 
 import (
-	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/33cn/chain33/common/db"
 	"github.com/33cn/chain33/common/db/table"
-
-	"github.com/33cn/chain33/client"
-	"google.golang.org/grpc"
 
 	"github.com/33cn/chain33/account"
 	"github.com/33cn/chain33/common"
@@ -48,12 +43,6 @@ const (
 
 	//MaxExpireHeight 距离游戏创建区块的最大过期高度差
 	MaxExpireHeight = 1000000
-
-	//grpcRecSize 接收缓冲大小
-	grpcRecSize int = 30 * 1024 * 1024
-
-	//retryNum 失败时的重试次数
-	retryNum = 10
 )
 
 //Action 具体动作执行
@@ -67,28 +56,13 @@ type Action struct {
 	execaddr     string
 	localDB      dbm.KVDB
 	index        int
-	api          client.QueueProtocolAPI
-	conn         *grpc.ClientConn
-	grpcClient   types.Chain33Client
+	mainHeight   int64
 }
 
 //NewAction 生成Action对象
 func NewAction(guess *Guess, tx *types.Transaction, index int) *Action {
 	hash := tx.Hash()
 	fromAddr := tx.From()
-
-	msgRecvOp := grpc.WithMaxMsgSize(grpcRecSize)
-	paraRemoteGrpcClient := types.Conf("config.consensus").GStr("ParaRemoteGrpcClient")
-	if types.IsPara() && paraRemoteGrpcClient == "" {
-		panic("ParaRemoteGrpcClient error")
-	}
-
-	conn, err := grpc.Dial(paraRemoteGrpcClient, grpc.WithInsecure(), msgRecvOp)
-
-	if err != nil {
-		panic(err)
-	}
-	grpcClient := types.NewChain33Client(conn)
 
 	return &Action{
 		coinsAccount: guess.GetCoinsAccount(),
@@ -100,9 +74,7 @@ func NewAction(guess *Guess, tx *types.Transaction, index int) *Action {
 		execaddr:     dapp.ExecAddress(string(tx.Execer)),
 		localDB:      guess.GetLocalDB(),
 		index:        index,
-		api:          guess.GetAPI(),
-		conn:         conn,
-		grpcClient:   grpcClient,
+		mainHeight:   guess.GetMainHeight(),
 	}
 }
 
@@ -232,7 +204,10 @@ func queryJoinTableData(talbeJoin *table.JoinTable, indexName string, prefix, pr
 
 func (action *Action) saveGame(game *gty.GuessGame) (kvset []*types.KeyValue) {
 	value := types.Encode(game)
-	action.db.Set(Key(game.GetGameID()), value)
+	err := action.db.Set(Key(game.GetGameID()), value)
+	if err != nil {
+		logger.Error("saveGame have err:", err.Error())
+	}
 	kvset = append(kvset, &types.KeyValue{Key: Key(game.GameID), Value: value})
 	return kvset
 }
@@ -296,10 +271,10 @@ func (action *Action) readGame(id string) (*gty.GuessGame, error) {
 }
 
 // 新建一局游戏
-func (action *Action) newGame(gameID string, start *gty.GuessGameStart) (*gty.GuessGame, error) {
+func (action *Action) newGame(gameID string, start *gty.GuessGameStart) *gty.GuessGame {
 	game := &gty.GuessGame{
 		GameID: gameID,
-		Status: gty.GuessGameActionStart,
+		Status: gty.GuessGameStatusStart,
 		//StartTime:   action.blocktime,
 		StartTxHash:    gameID,
 		Topic:          start.Topic,
@@ -319,7 +294,7 @@ func (action *Action) newGame(gameID string, start *gty.GuessGameStart) (*gty.Gu
 		DrivenByAdmin: start.DrivenByAdmin,
 	}
 
-	return game, nil
+	return game
 }
 
 //GameStart 创建游戏动作执行
@@ -373,18 +348,9 @@ func (action *Action) GameStart(start *gty.GuessGameStart) (*types.Receipt, erro
 	}
 
 	gameID := common.ToHex(action.txhash)
-	game, _ := action.newGame(gameID, start)
+	game := action.newGame(gameID, start)
 	game.StartTime = action.blocktime
-	if types.IsPara() {
-		mainHeight := action.GetMainHeightByTxHash(action.txhash)
-		if mainHeight < 0 {
-			logger.Error("GameStart", "mainHeight", mainHeight)
-			return nil, gty.ErrGuessStatus
-		}
-		game.StartHeight = mainHeight
-	} else {
-		game.StartHeight = action.height
-	}
+	game.StartHeight = action.mainHeight
 	game.AdminAddr = action.fromaddr
 	game.PreIndex = 0
 	game.Index = action.getIndex()
@@ -613,7 +579,7 @@ func (action *Action) GamePublish(publish *gty.GuessGamePublish) (*types.Receipt
 
 		receipt, err = action.coinsAccount.ExecTransfer(player.Addr, game.AdminAddr, action.execaddr, value)
 		if err != nil {
-			action.coinsAccount.ExecFrozen(game.AdminAddr, action.execaddr, value) // rollback
+			//action.coinsAccount.ExecFrozen(game.AdminAddr, action.execaddr, value) // rollback
 			logger.Error("GamePublish", "addr", player.Addr, "execaddr", action.execaddr,
 				"amount", value, "err", err)
 			return nil, err
@@ -649,7 +615,7 @@ func (action *Action) GamePublish(publish *gty.GuessGamePublish) (*types.Receipt
 		devFee = totalBetsNumber * game.DevFeeFactor / 1000
 		receipt, err := action.coinsAccount.ExecTransfer(game.AdminAddr, devAddr, action.execaddr, devFee)
 		if err != nil {
-			action.coinsAccount.ExecFrozen(game.AdminAddr, action.execaddr, devFee) // rollback
+			//action.coinsAccount.ExecFrozen(game.AdminAddr, action.execaddr, devFee) // rollback
 			logger.Error("GamePublish", "adminAddr", game.AdminAddr, "execaddr", action.execaddr,
 				"amount", devFee, "err", err)
 			return nil, err
@@ -662,7 +628,7 @@ func (action *Action) GamePublish(publish *gty.GuessGamePublish) (*types.Receipt
 		platFee = totalBetsNumber * game.PlatFeeFactor / 1000
 		receipt, err := action.coinsAccount.ExecTransfer(game.AdminAddr, platAddr, action.execaddr, platFee)
 		if err != nil {
-			action.coinsAccount.ExecFrozen(game.AdminAddr, action.execaddr, platFee) // rollback
+			//action.coinsAccount.ExecFrozen(game.AdminAddr, action.execaddr, platFee) // rollback
 			logger.Error("GamePublish", "adminAddr", game.AdminAddr, "execaddr", action.execaddr,
 				"amount", platFee, "err", err)
 			return nil, err
@@ -679,7 +645,7 @@ func (action *Action) GamePublish(publish *gty.GuessGamePublish) (*types.Receipt
 			value := player.Bet.BetsNumber * winValue / winBetsNumber
 			receipt, err := action.coinsAccount.ExecTransfer(game.AdminAddr, player.Addr, action.execaddr, value)
 			if err != nil {
-				action.coinsAccount.ExecFrozen(player.Addr, action.execaddr, value) // rollback
+				//action.coinsAccount.ExecFrozen(player.Addr, action.execaddr, value) // rollback
 				logger.Error("GamePublish", "addr", player.Addr, "execaddr", action.execaddr,
 					"amount", value, "err", err)
 				return nil, err
@@ -831,18 +797,7 @@ func (action *Action) changeAllAddrIndex(game *gty.GuessGame) {
 
 //refreshStatusByTime 检测游戏是否过期，是否可以下注
 func (action *Action) refreshStatusByTime(game *gty.GuessGame) (canBet bool) {
-
-	var mainHeight int64
-	if types.IsPara() {
-		mainHeight = action.GetMainHeightByTxHash(action.txhash)
-		if mainHeight < 0 {
-			logger.Error("RefreshStatusByTime", "mainHeight err", mainHeight)
-			return true
-		}
-	} else {
-		mainHeight = action.height
-	}
-
+	mainHeight := action.mainHeight
 	//如果完全由管理员驱动状态变化，则除了保护性过期判断外，不需要做其他判断。
 	if game.DrivenByAdmin {
 
@@ -898,19 +853,4 @@ func (action *Action) checkTime(start *gty.GuessGameStart) bool {
 	}
 
 	return false
-}
-
-// GetMainHeightByTxHash get Block height
-func (action *Action) GetMainHeightByTxHash(txHash []byte) int64 {
-	for i := 0; i < retryNum; i++ {
-		req := &types.ReqHash{Hash: txHash}
-		txDetail, err := action.grpcClient.QueryTransaction(context.Background(), req)
-		if err != nil {
-			time.Sleep(time.Second)
-		} else {
-			return txDetail.GetHeight()
-		}
-	}
-
-	return -1
 }

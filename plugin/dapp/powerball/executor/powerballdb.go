@@ -203,7 +203,7 @@ func (action *Action) GetPauseReceiptLog(powerball *pty.Powerball, preStatus int
 
 // GetDrawReceiptLog generate logs for powerball draw action
 func (action *Action) GetDrawReceiptLog(powerball *pty.Powerball, preStatus int32, round int64, luckyNum *pty.BallNumber, updateInfo *pty.PowerballUpdateBuyInfo,
-	addrNumThisRound int64, buyAmountThisRound int64, gainInfos *pty.PowerballGainInfos) *types.ReceiptLog {
+	addrNumThisRound int64, buyAmountThisRound int64, gainInfos *pty.PowerballGainInfos, prizeInfo []*pty.PowerballPrizeInfo) *types.ReceiptLog {
 	log := &types.ReceiptLog{}
 	log.Ty = pty.TyLogPowerballDraw
 
@@ -218,6 +218,7 @@ func (action *Action) GetDrawReceiptLog(powerball *pty.Powerball, preStatus int3
 		p.UpdateInfo = updateInfo
 	}
 	p.GainInfos = gainInfos
+	p.PrizeInfo = prizeInfo
 	log.Log = types.Encode(p)
 	return log
 }
@@ -473,7 +474,7 @@ func (action *Action) PowerballDraw(draw *pty.PowerballDraw) (*types.Receipt, er
 		return nil, pty.ErrPowerballDrawActionInvalid
 	}
 
-	rec, updateInfo, gainInfos, err := action.checkDraw(ball)
+	rec, updateInfo, gainInfos, prizeInfo, err := action.checkDraw(ball)
 	if err != nil {
 		return nil, err
 	}
@@ -483,7 +484,7 @@ func (action *Action) PowerballDraw(draw *pty.PowerballDraw) (*types.Receipt, er
 	ball.Save(action.db)
 	kv = append(kv, ball.GetKVSet()...)
 
-	receiptLog := action.GetDrawReceiptLog(&ball.Powerball, preStatus, ball.Round, ball.LuckyNumber, updateInfo, ball.TotalAddrNum, ball.SaleFund, gainInfos)
+	receiptLog := action.GetDrawReceiptLog(&ball.Powerball, preStatus, ball.Round, ball.LuckyNumber, updateInfo, ball.TotalAddrNum, ball.SaleFund, gainInfos, prizeInfo)
 	logs = append(logs, receiptLog)
 
 	receipt = &types.Receipt{Ty: types.ExecOk, KV: kv, Logs: logs}
@@ -649,10 +650,10 @@ func checkPrizeLevel(luckynum *pty.BallNumber, guessnum *pty.BallNumber) int {
 	return Zero
 }
 
-func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.PowerballUpdateBuyInfo, *pty.PowerballGainInfos, error) {
+func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.PowerballUpdateBuyInfo, *pty.PowerballGainInfos, []*pty.PowerballPrizeInfo, error) {
 	luckynum := action.findLuckyNum(false, ball)
 	if luckynum == nil {
-		return nil, nil, nil, pty.ErrPowerballErrLuckyNum
+		return nil, nil, nil, nil, pty.ErrPowerballErrLuckyNum
 	}
 	pblog.Info("checkDraw", "luckynum", luckynum.Balls)
 
@@ -660,6 +661,7 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 	var kv []*types.KeyValue
 	var updateInfo pty.PowerballUpdateBuyInfo
 	var gainInfos pty.PowerballGainInfos
+	var prizeInfo []*pty.PowerballPrizeInfo
 	totalPrizeCnt := make([]int64, PrizeRange)
 
 	for _, info := range ball.PurInfos {
@@ -710,18 +712,27 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 	highPrizeFund := currentFund - lowPrizeFund
 	pblog.Debug("checkDraw", "currentFund", currentFund, "lowPrizeFund", lowPrizeFund, "highPrizeFund", highPrizeFund)
 
+	adjustPrizeCnt := make([]int64, PrizeRange)
 	for i := First; i < Fifth+1; i++ {
-		if totalPrizeCnt[i] == 0 {
-			totalPrizeCnt[i] = 1
+		adjustPrizeCnt[i] = totalPrizeCnt[i]
+		if adjustPrizeCnt[i] == 0 {
+			adjustPrizeCnt[i] = 1
 		}
 	}
-	firstPrize := highPrizeFund * FirstRatio / 1000 / totalPrizeCnt[First]
-	secondPrize := highPrizeFund * SecondRatio / 1000 / totalPrizeCnt[Second]
-	thirdPrize := highPrizeFund * ThirdRatio / 1000 / totalPrizeCnt[Third]
-	fourthPrize := highPrizeFund * FourthRatio / 1000 / totalPrizeCnt[Fourth]
-	fifthPrize := highPrizeFund * FifthRatio / 1000 / totalPrizeCnt[Fifth]
+	firstPrize := highPrizeFund * FirstRatio / 1000 / adjustPrizeCnt[First]
+	secondPrize := highPrizeFund * SecondRatio / 1000 / adjustPrizeCnt[Second]
+	thirdPrize := highPrizeFund * ThirdRatio / 1000 / adjustPrizeCnt[Third]
+	fourthPrize := highPrizeFund * FourthRatio / 1000 / adjustPrizeCnt[Fourth]
+	fifthPrize := highPrizeFund * FifthRatio / 1000 / adjustPrizeCnt[Fifth]
 	pblog.Debug("checkDraw", "firstPrize", firstPrize, "secondPrize", secondPrize, "thirdPrize", thirdPrize,
 		"fourthPrize", fourthPrize, "fifthPrize", fifthPrize)
+
+	prizeInfo = append(prizeInfo, &pty.PowerballPrizeInfo{Count: totalPrizeCnt[First], Amount: firstPrize})
+	prizeInfo = append(prizeInfo, &pty.PowerballPrizeInfo{Count: totalPrizeCnt[Second], Amount: secondPrize})
+	prizeInfo = append(prizeInfo, &pty.PowerballPrizeInfo{Count: totalPrizeCnt[Third], Amount: thirdPrize})
+	prizeInfo = append(prizeInfo, &pty.PowerballPrizeInfo{Count: totalPrizeCnt[Fourth], Amount: fourthPrize})
+	prizeInfo = append(prizeInfo, &pty.PowerballPrizeInfo{Count: totalPrizeCnt[Fifth], Amount: fifthPrize})
+	prizeInfo = append(prizeInfo, &pty.PowerballPrizeInfo{Count: totalPrizeCnt[Sixth], Amount: sixthPrize})
 
 	totalPrizeFund := int64(0)
 	for _, info := range ball.PurInfos {
@@ -737,7 +748,7 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 	pblog.Debug("checkDraw transfer to platform", "platformFund", platformFund)
 	receipt1, err := action.coinsAccount.ExecTransferFrozen(ball.CreateAddr, PlatformAddr, action.execaddr, platformFund)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	kv = append(kv, receipt1.KV...)
 	logs = append(logs, receipt1.Logs...)
@@ -745,7 +756,7 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 	pblog.Debug("checkDraw transfer to develop", "developFund", developFund)
 	receipt2, err := action.coinsAccount.ExecTransferFrozen(ball.CreateAddr, DevelopAddr, action.execaddr, developFund)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	kv = append(kv, receipt2.KV...)
 	logs = append(logs, receipt2.Logs...)
@@ -755,7 +766,7 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 			pblog.Debug("checkDraw pay bonus", "addr", info.Addr, "bonus", info.FundWin)
 			receipt, err := action.coinsAccount.ExecTransferFrozen(ball.CreateAddr, info.Addr, action.execaddr, info.FundWin)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, nil, err
 			}
 
 			kv = append(kv, receipt.KV...)
@@ -779,12 +790,12 @@ func (action *Action) checkDraw(ball *PowerballDB) (*types.Receipt, *pty.Powerba
 		mainHeight := action.powerball.GetMainHeight()
 		if mainHeight < 0 {
 			pblog.Error("PowerballBuy", "mainHeight", mainHeight)
-			return nil, nil, nil, pty.ErrPowerballStatus
+			return nil, nil, nil, nil, pty.ErrPowerballStatus
 		}
 		ball.LastTransToDrawStateOnMain = mainHeight
 	}
 
-	return &types.Receipt{Ty: types.ExecOk, KV: kv, Logs: logs}, &updateInfo, &gainInfos, nil
+	return &types.Receipt{Ty: types.ExecOk, KV: kv, Logs: logs}, &updateInfo, &gainInfos, prizeInfo, nil
 }
 
 func (action *Action) recordMissing(ball *PowerballDB) {

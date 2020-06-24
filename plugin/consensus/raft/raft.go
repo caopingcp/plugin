@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -40,12 +41,14 @@ type raftNode struct {
 	commitC          chan<- *types.Block
 	errorC           chan<- error
 	id               int
+	peers            []string
 	bootstrapPeers   []string
 	readOnlyPeers    []string
 	addPeers         []string
 	join             bool
 	waldir           string
 	snapdir          string
+	peersFile        string
 	getSnapshot      func() ([]byte, error)
 	lastIndex        uint64
 	confState        raftpb.ConfState
@@ -60,10 +63,7 @@ type raftNode struct {
 	transport        *rafthttp.Transport
 	stopMu           sync.RWMutex
 	ctx              context.Context
-	//stopc            chan struct{}
-	//httpstopc  chan struct{}
-	//httpdonec  chan struct{}
-	validatorC chan bool
+	validatorC       chan bool
 	//用于判断该节点是否重启过
 	restartC chan struct{}
 }
@@ -73,13 +73,18 @@ type Node struct {
 }
 
 // NewRaftNode create raft node
-func NewRaftNode(ctx context.Context, id int, join bool, peers []string, readOnlyPeers []string, addPeers []string, getSnapshot func() ([]byte, error), proposeC <-chan *types.Block,
+func NewRaftNode(ctx context.Context, id int, join bool, bootstrapPeers []string, readOnlyPeers []string, addPeers []string, getSnapshot func() ([]byte, error), proposeC <-chan *types.Block,
 	confChangeC <-chan raftpb.ConfChange) (<-chan *types.Block, <-chan error, <-chan *snap.Snapshotter, <-chan bool) {
 
 	rlog.Info("Enter consensus raft")
 	// commit channel
 	commitC := make(chan *types.Block)
 	errorC := make(chan error)
+	var peers []string
+	peers = append(peers, bootstrapPeers...)
+	peers = append(peers, readOnlyPeers...)
+	peers = append(peers, addPeers...)
+
 	rc := &raftNode{
 		proposeC:         proposeC,
 		confChangeC:      confChangeC,
@@ -87,11 +92,13 @@ func NewRaftNode(ctx context.Context, id int, join bool, peers []string, readOnl
 		errorC:           errorC,
 		id:               id,
 		join:             join,
-		bootstrapPeers:   peers,
+		peers:            peers,
+		bootstrapPeers:   bootstrapPeers,
 		readOnlyPeers:    readOnlyPeers,
 		addPeers:         addPeers,
 		waldir:           fmt.Sprintf("chain33_raft-%d%swal", id, string(os.PathSeparator)),
 		snapdir:          fmt.Sprintf("chain33_raft-%d%ssnap", id, string(os.PathSeparator)),
+		peersFile:        fmt.Sprintf("chain33_raft-%d%speers.info", id, string(os.PathSeparator)),
 		getSnapshot:      getSnapshot,
 		snapCount:        defaultSnapCount,
 		validatorC:       make(chan bool),
@@ -120,7 +127,16 @@ func (rc *raftNode) startRaft() {
 	oldwal := wal.Exist(rc.waldir)
 	rc.wal = rc.replayWAL()
 
-	rpeers := make([]raft.Peer, len(rc.bootstrapPeers))
+	var initPeers []string
+	if fileutil.Exist(rc.peersFile) {
+		initPeers = loadPeers(rc.peersFile)
+		rc.peers = initPeers
+	} else {
+		initPeers = rc.bootstrapPeers
+		savePeers(rc.peersFile, rc.peers)
+	}
+
+	rpeers := make([]raft.Peer, len(initPeers))
 	for i := range rpeers {
 		rpeers[i] = raft.Peer{ID: uint64(i + 1)}
 	}
@@ -163,9 +179,9 @@ func (rc *raftNode) startRaft() {
 		rlog.Error(fmt.Sprintf("raft:transport.Start (%v)", err.Error()))
 		panic(err)
 	}
-	for i := range rc.bootstrapPeers {
+	for i := range initPeers {
 		if i+1 != rc.id {
-			rc.transport.AddPeer(typec.ID(i+1), []string{rc.bootstrapPeers[i]})
+			rc.transport.AddPeer(typec.ID(i+1), []string{initPeers[i]})
 		}
 	}
 
@@ -182,12 +198,7 @@ func (rc *raftNode) startRaft() {
 
 // 网络监听
 func (rc *raftNode) serveRaft() {
-	var peers []string
-	//TODO: 配置太繁琐，有风险
-	peers = append(peers, rc.bootstrapPeers...)
-	peers = append(peers, rc.readOnlyPeers...)
-	peers = append(peers, rc.addPeers...)
-	nodeURL, err := url.Parse(peers[rc.id-1])
+	nodeURL, err := url.Parse(rc.peers[rc.id-1])
 	if err != nil {
 		rlog.Error(fmt.Sprintf("raft: Failed parsing URL (%v)", err.Error()))
 		panic(err)
@@ -515,6 +526,11 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			case raftpb.ConfChangeAddNode:
 				if len(cc.Context) > 0 {
 					rc.transport.AddPeer(typec.ID(cc.NodeID), []string{string(cc.Context)})
+					rlog.Info("add node", "id", cc.NodeID, "num", len(rc.peers))
+					if cc.NodeID == uint64(len(rc.peers)+1) {
+						rc.peers = append(rc.peers, string(cc.Context))
+						savePeers(rc.peersFile, rc.peers)
+					}
 				}
 			case raftpb.ConfChangeRemoveNode:
 				if cc.NodeID == uint64(rc.id) {
@@ -522,9 +538,15 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 					return false
 				}
 				rc.transport.RemovePeer(typec.ID(cc.NodeID))
+				rlog.Info("remove node", "id", cc.NodeID)
 			case raftpb.ConfChangeAddLearnerNode:
 				if len(cc.Context) > 0 {
 					rc.transport.AddPeer(typec.ID(cc.NodeID), []string{string(cc.Context)})
+					rlog.Info("add learner node", "id", cc.NodeID, "num", len(rc.peers))
+					if cc.NodeID == uint64(len(rc.peers)+1) {
+						rc.peers = append(rc.peers, string(cc.Context))
+						savePeers(rc.peersFile, rc.peers)
+					}
 				}
 				isReady = true
 			}
@@ -648,4 +670,29 @@ func removeWal(names []string, waldir string) error {
 		}
 	}
 	return nil
+}
+
+func loadPeers(path string) []string {
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		panic(err)
+	}
+	peers := strings.Split(string(data), ",")
+	rlog.Info("load peers info", "peers", peers)
+	return peers
+}
+
+func savePeers(path string, peers []string) {
+	var str string
+	for i, peer := range peers {
+		str = str + peer
+		if i < len(peers)-1 {
+			str = str + ","
+		}
+	}
+	err := ioutil.WriteFile(path, []byte(str), 0666)
+	if err != nil {
+		panic(err)
+	}
+	rlog.Info("save peers info", "peers", peers)
 }

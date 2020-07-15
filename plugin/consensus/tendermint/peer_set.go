@@ -481,7 +481,7 @@ FOR_LOOP:
 
 			pc.sendBuffer = append(pc.sendBuffer, bytes...)
 			if len+5 > MaxMsgPacketPayloadSize {
-				pc.sendBuffer = append(pc.sendBuffer, bytes[MaxMsgPacketPayloadSize-5:]...)
+				tendermintlog.Info("packet exceed max size", "len", len+5)
 			}
 			_, err = pc.bufWriter.Write(pc.sendBuffer[:len+5])
 			if err != nil {

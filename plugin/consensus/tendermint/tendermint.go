@@ -445,6 +445,7 @@ func (client *Client) CreateBlock() {
 			continue
 		}
 		if !client.CheckTxsAvailable(height) {
+			tendermintlog.Info("no tx available")
 			issleep = true
 			continue
 		}
@@ -473,9 +474,30 @@ func (client *Client) StopC() <-chan struct{} {
 	return client.stopC
 }
 
+// GetMempoolSize get tx num in mempool
+func (client *Client) GetMempoolSize() int64 {
+	msg := client.GetQueueClient().NewMessage("mempool", types.EventGetMempoolSize, nil)
+	err := client.GetQueueClient().Send(msg, true)
+	if err != nil {
+		tendermintlog.Error("GetMempoolSize send", "err", err)
+		return 0
+	}
+	resp, err := client.GetQueueClient().Wait(msg)
+	if err != nil {
+		tendermintlog.Error("GetMempoolSize wait", "err", err)
+		return 0
+	}
+	return resp.GetData().(*types.MempoolSize).GetSize()
+}
+
 // CheckTxsAvailable check whether some new transactions arriving
 func (client *Client) CheckTxsAvailable(height int64) bool {
-	txs := client.RequestTx(10, nil)
+	num := client.GetMempoolSize()
+	if num == 0 {
+		tendermintlog.Info("mempool is empty")
+		return false
+	}
+	txs := client.RequestTx(10000, nil)
 	txs = client.CheckTxDup(txs, height)
 	return len(txs) != 0
 }
@@ -578,7 +600,7 @@ func (client *Client) QueryValidatorsByHeight(height int64) (*tmtypes.ValNodes, 
 	}
 	msg, err = client.GetQueueClient().Wait(msg)
 	if err != nil {
-		tendermintlog.Info("QueryValidatorsByHeight result", "err", err)
+		tendermintlog.Error("QueryValidatorsByHeight wait", "err", err)
 		return nil, err
 	}
 	return msg.GetData().(types.Message).(*tmtypes.ValNodes), nil

@@ -153,7 +153,7 @@ func NewNode(seeds []string, protocol string, lAddr string, privKey crypto.PrivK
 		dialing:          NewMutexMap(),
 		reconnecting:     NewMutexMap(),
 		broadcastChannel: make(chan MsgInfo, maxSendQueueSize),
-		unicastChannel:   make(chan MsgInfo, minSendQueueSize),
+		unicastChannel:   make(chan MsgInfo, maxSendQueueSize),
 		state:            state,
 		localIPs:         make(map[string]net.IP),
 	}

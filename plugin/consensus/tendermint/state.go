@@ -33,6 +33,8 @@ type State struct {
 	// Immutable
 	ChainID string
 
+	// LastHeight represent consensus height
+	LastHeight int64
 	// LastBlockHeight=0 at genesis (ie. block(H=0) does not exist)
 	LastBlockHeight  int64
 	LastBlockTotalTx int64
@@ -42,8 +44,8 @@ type State struct {
 	// LastValidators is used to validate block.LastCommit.
 	// Validators are persisted to the database separately every time they change,
 	// so we can query for historical validator sets.
-	// Note that if s.LastBlockHeight causes a valset change,
-	// we set s.LastHeightValidatorsChanged = s.LastBlockHeight + 1
+	// Note that if s.LastHeight causes a valset change,
+	// we set s.LastHeightValidatorsChanged = s.LastHeight + 1
 	Validators                  *ttypes.ValidatorSet
 	LastValidators              *ttypes.ValidatorSet
 	LastHeightValidatorsChanged int64
@@ -65,7 +67,7 @@ func (s State) Copy() State {
 	return State{
 		ChainID: s.ChainID,
 
-		LastBlockHeight:  s.LastBlockHeight,
+		LastHeight:       s.LastHeight,
 		LastBlockTotalTx: s.LastBlockTotalTx,
 		LastBlockID:      s.LastBlockID,
 		LastBlockTime:    s.LastBlockTime,
@@ -128,6 +130,8 @@ func (s State) MakeBlock(height int64, round int64, pblock *types.Block, commit 
 	block.Header.ConsensusHash = s.ConsensusParams.Hash()
 	block.Header.LastResultsHash = s.LastResultsHash
 	block.Header.ProposerAddr = proposerAddr
+	block.Header.BlockSequence = 0
+	block.Header.BlockHeight = pblock.Height
 
 	return block
 }
@@ -187,9 +191,9 @@ func MakeGenesisState(genDoc *ttypes.GenesisDoc) (State, error) {
 
 		ChainID: genDoc.ChainID,
 
-		LastBlockHeight: 0,
-		LastBlockID:     ttypes.BlockID{},
-		LastBlockTime:   genDoc.GenesisTime.UnixNano(),
+		LastHeight:    0,
+		LastBlockID:   ttypes.BlockID{},
+		LastBlockTime: genDoc.GenesisTime.UnixNano(),
 
 		Validators:                  ttypes.NewValidatorSet(validators),
 		LastValidators:              ttypes.NewValidatorSet(nil),
@@ -221,7 +225,7 @@ func NewStateDB(client *Client, state State) *CSStateDB {
 func LoadState(state *tmtypes.State) State {
 	stateTmp := State{
 		ChainID:                          state.GetChainID(),
-		LastBlockHeight:                  state.GetLastBlockHeight(),
+		LastHeight:                       state.GetLastBlockHeight(),
 		LastBlockTotalTx:                 state.GetLastBlockTotalTx(),
 		LastBlockID:                      ttypes.BlockID{BlockID: *state.LastBlockID},
 		LastBlockTime:                    state.LastBlockTime,
@@ -300,7 +304,7 @@ func (csdb *CSStateDB) LoadValidators(height int64) (*ttypes.ValidatorSet, error
 	if height < 1 {
 		return nil, ttypes.ErrHeightLessThanOne
 	}
-	if csdb.state.LastBlockHeight == height {
+	if csdb.state.LastHeight == height {
 		return csdb.state.Validators, nil
 	}
 
@@ -352,7 +356,7 @@ func saveProposer(dest *tmtypes.Validator, source *ttypes.Validator) {
 func SaveState(state State) *tmtypes.State {
 	newState := tmtypes.State{
 		ChainID:                          state.ChainID,
-		LastBlockHeight:                  state.LastBlockHeight,
+		LastBlockHeight:                  state.LastHeight,
 		LastBlockTotalTx:                 state.LastBlockTotalTx,
 		LastBlockID:                      &state.LastBlockID.BlockID,
 		LastBlockTime:                    state.LastBlockTime,

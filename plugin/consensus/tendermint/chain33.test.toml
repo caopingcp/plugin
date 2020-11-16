@@ -96,6 +96,10 @@ preExec=false
 signName="ed25519"
 # 是否使用聚合签名,签名算法需支持该特性,比如"bls"
 useAggregateSignature=false
+# 一次轮换提议多少个区块，默认为1
+multiBlocks=1
+# 中途切换提议节点超时等待时间，单位毫秒，默认为5000
+timeoutChangeProposer=5000
 
 [store]
 name="kvmvcc"

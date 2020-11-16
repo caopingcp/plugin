@@ -76,17 +76,18 @@ message ValidatorSet {
 
 message State {
     string          chainID                          = 1;
-    int64           lastBlockHeight                  = 2;
-    int64           lastBlockTotalTx                 = 3;
-    BlockID         lastBlockID                      = 4;
-    int64           lastBlockTime                    = 5;
-    ValidatorSet    validators                       = 6;
-    ValidatorSet    lastValidators                   = 7;
-    int64           lastHeightValidatorsChanged      = 8;
-    ConsensusParams consensusParams                  = 9;
-    int64           lastHeightConsensusParamsChanged = 10;
-    bytes           lastResultsHash                  = 11;
-    bytes           appHash                          = 12;
+    int64           lastHeight                       = 2;
+    int64           lastBlockHeight                  = 3;
+    int64           lastBlockTotalTx                 = 4;
+    BlockID         lastBlockID                      = 5;
+    int64           lastBlockTime                    = 6;
+    ValidatorSet    validators                       = 7;
+    ValidatorSet    lastValidators                   = 8;
+    int64           lastHeightValidatorsChanged      = 9;
+    ConsensusParams consensusParams                  = 10;
+    int64           lastHeightConsensusParamsChanged = 11;
+    bytes           lastResultsHash                  = 12;
+    bytes           appHash                          = 13;
 }
 
 message TendermintBlockHeader {
@@ -103,6 +104,8 @@ message TendermintBlockHeader {
     bytes   appHash         = 11;
     bytes   lastResultsHash = 12;
     bytes   proposerAddr    = 13;
+    int64   blockHeight     = 14;
+    int64   blockSequence   = 15;
 }
 
 message TendermintBlock {
@@ -112,13 +115,14 @@ message TendermintBlock {
 }
 
 message Proposal {
-    int64   height     = 1;
-    int32   round      = 2;
-    int64   timestamp  = 3;
-    int32   POLRound   = 4;
-    BlockID POLBlockID = 5;
-    bytes   signature  = 6;
-    bytes   blockhash  = 7;
+    int64   height      = 1;
+    int32   round       = 2;
+    int64   timestamp   = 3;
+    int32   POLRound    = 4;
+    BlockID POLBlockID  = 5;
+    bytes   signature   = 6;
+    bytes   blockhash   = 7;
+    int64   blockHeight = 8;
 }
 
 message NewRoundStepMsg {

@@ -23,7 +23,12 @@ func (val *ValNode) ExecLocal_Node(node *pty.ValNode, tx *types.Transaction, rec
 // ExecLocal_BlockInfo method
 func (val *ValNode) ExecLocal_BlockInfo(blockInfo *pty.TendermintBlockInfo, tx *types.Transaction, receipt *types.ReceiptData, index int) (*types.LocalDBSet, error) {
 	set := &types.LocalDBSet{}
-	key := CalcValNodeBlockInfoHeightKey(val.GetHeight())
+	seq := blockInfo.Block.Header.BlockSequence
+	if seq > 0 {
+		return nil, nil
+	}
+	height := blockInfo.Block.Header.Height
+	key := CalcValNodeBlockInfoHeightKey(height)
 	set.KV = append(set.KV, &types.KeyValue{Key: key, Value: types.Encode(blockInfo)})
 	return set, nil
 }

@@ -166,7 +166,7 @@ func (cs *ConsensusState) GetRoundState() *ttypes.RoundState {
 func (cs *ConsensusState) GetValidators() (int64, []*ttypes.Validator) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
-	return cs.state.LastBlockHeight, cs.state.Validators.Copy().Validators
+	return cs.state.LastHeight, cs.state.Validators.Copy().Validators
 }
 
 // GetPrivValidator returns the private validator account for signing votes.
@@ -264,12 +264,12 @@ func (cs *ConsensusState) sendInternalMessage(mi MsgInfo) {
 // Reconstruct LastCommit from SeenCommit, which we saved along with the block,
 // (which happens even before saving the state)
 func (cs *ConsensusState) reconstructLastCommit(state State) {
-	if state.LastBlockHeight == 0 {
+	if state.LastHeight == 0 {
 		return
 	}
-	seenCommit := cs.client.csStore.LoadSeenCommit(state.LastBlockHeight)
+	seenCommit := cs.client.csStore.LoadSeenCommit(state.LastHeight)
 	seenCommitC := ttypes.Commit{TendermintCommit: seenCommit}
-	lastPrecommits := ttypes.NewVoteSet(state.ChainID, state.LastBlockHeight, seenCommitC.Round(), ttypes.VoteTypePrecommit, state.LastValidators)
+	lastPrecommits := ttypes.NewVoteSet(state.ChainID, state.LastHeight, seenCommitC.Round(), ttypes.VoteTypePrecommit, state.LastValidators)
 	for _, item := range seenCommit.Precommits {
 		if item == nil || len(item.Signature) == 0 {
 			continue
@@ -296,20 +296,20 @@ func (cs *ConsensusState) reconstructLastCommit(state State) {
 // Updates ConsensusState and increments height to match that of state.
 // The round becomes 0 and cs.Step becomes ttypes.RoundStepNewHeight.
 func (cs *ConsensusState) updateToState(state State) {
-	if cs.CommitRound > -1 && 0 < cs.Height && cs.Height != state.LastBlockHeight {
-		panic(fmt.Sprintf("updateToState expected state height of %v but found %v", cs.Height, state.LastBlockHeight))
+	if cs.CommitRound > -1 && 0 < cs.Height && cs.Height != state.LastHeight {
+		panic(fmt.Sprintf("updateToState expected state height of %v but found %v", cs.Height, state.LastHeight))
 	}
-	if !cs.state.IsEmpty() && cs.state.LastBlockHeight+1 != cs.Height {
+	if !cs.state.IsEmpty() && cs.state.LastHeight+1 != cs.Height {
 		// This might happen when someone else is mutating cs.state.
 		// Someone forgot to pass in state.Copy() somewhere?!
-		panic(fmt.Sprintf("Inconsistent cs.state.LastBlockHeight+1 %v vs cs.Height %v", cs.state.LastBlockHeight+1, cs.Height))
+		panic(fmt.Sprintf("Inconsistent cs.state.LastHeight+1 %v vs cs.Height %v", cs.state.LastHeight+1, cs.Height))
 	}
 
 	// If state isn't further out than cs.state, just ignore.
 	// This happens when SwitchToConsensus() is called in the reactor.
 	// We don't want to reset e.g. the Votes.
-	if !cs.state.IsEmpty() && (state.LastBlockHeight <= cs.state.LastBlockHeight) {
-		tendermintlog.Info("Ignoring updateToState()", "newHeight", state.LastBlockHeight+1, "oldHeight", cs.state.LastBlockHeight+1)
+	if !cs.state.IsEmpty() && (state.LastHeight <= cs.state.LastHeight) {
+		tendermintlog.Info("Ignoring updateToState()", "newHeight", state.LastHeight+1, "oldHeight", cs.state.LastHeight+1)
 		return
 	}
 
@@ -323,8 +323,8 @@ func (cs *ConsensusState) updateToState(state State) {
 		lastPrecommits = cs.Votes.Precommits(cs.CommitRound)
 	}
 
-	// Next desired block height
-	height := state.LastBlockHeight + 1
+	// Next desired consensus height
+	height := state.LastHeight + 1
 
 	// RoundState fields
 	cs.updateHeight(height)
@@ -721,7 +721,7 @@ func (cs *ConsensusState) defaultDecideProposal(height int64, round int) {
 
 	// Make proposal
 	propBlockID := tmtypes.BlockID{Hash: block.Hash()}
-	proposal := ttypes.NewProposal(height, round, block.Hash(), cs.ValidRound, propBlockID)
+	proposal := ttypes.NewProposal(height, round, block.Hash(), cs.ValidRound, propBlockID, block.Header.BlockHeight)
 	if err := cs.privValidator.SignProposal(cs.state.ChainID, proposal); err == nil {
 		// send proposal and block on internal msg queue
 		cs.sendInternalMessage(MsgInfo{ttypes.ProposalID, &proposal.Proposal, cs.ourID, ""})
@@ -775,7 +775,7 @@ func (cs *ConsensusState) createProposalBlock() (block *ttypes.TendermintBlock) 
 	tendermintlog.Info(fmt.Sprintf("createProposalBlock BuildBlock. Current: %v/%v/%v", cs.Height, cs.Round, cs.Step),
 		"height", pblock.Height, "txs-len", len(pblock.Txs), "cost", types.Since(beg))
 
-	if pblock.Height != cs.Height {
+	if multiBlocks == 1 && pblock.Height != cs.Height {
 		tendermintlog.Error("pblock.Height is not equal to cs.Height")
 		return nil
 	}
@@ -1160,10 +1160,10 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 		panic(fmt.Sprintf("finalizeCommit CommitBlock fail: %v", err))
 	}
 	if bytes.Equal(cs.privValidator.GetAddress(), block.TendermintBlock.Header.ProposerAddr) {
-		tendermintlog.Info(fmt.Sprintf("Proposer reach consensus. Current: %v/%v/%v", cs.Height, cs.Round, cs.Step), "CommitRound", cs.CommitRound,
+		tendermintlog.Info(fmt.Sprintf("Proposer reach consensus. Current: %v/%v/%v", cs.Height, cs.Round, cs.Step), "blockHeight", commitBlock.Height, "CommitRound", cs.CommitRound,
 			"tx-len", len(commitBlock.Txs), "cost", types.Since(cs.begCons), "proposer-addr", fmt.Sprintf("%X", ttypes.Fingerprint(block.TendermintBlock.Header.ProposerAddr)))
 	} else {
-		tendermintlog.Info(fmt.Sprintf("Not-Proposer reach consensus. Current: %v/%v/%v", cs.Height, cs.Round, cs.Step), "CommitRound", cs.CommitRound,
+		tendermintlog.Info(fmt.Sprintf("Not-Proposer reach consensus. Current: %v/%v/%v", cs.Height, cs.Round, cs.Step), "blockHeight", commitBlock.Height, "CommitRound", cs.CommitRound,
 			"tx-len", len(commitBlock.Txs), "cost", types.Since(cs.begCons), "proposer-addr", fmt.Sprintf("%X", ttypes.Fingerprint(block.TendermintBlock.Header.ProposerAddr)))
 	}
 	reqblock, err := cs.client.RequestBlock(height)
@@ -1234,6 +1234,12 @@ func (cs *ConsensusState) defaultSetProposal(proposal *tmtypes.Proposal) error {
 		return nil
 	}
 
+	if multiBlocks > 1 && proposal.BlockHeight <= cs.client.GetCurrentHeight() {
+		tendermintlog.Info("defaultSetProposal: invalid proposal BlockHeight", "blockHeight", proposal.BlockHeight,
+			"currentHeight", cs.client.GetCurrentHeight())
+		return nil
+	}
+
 	if cs.begCons.IsZero() {
 		cs.begCons = time.Now()
 	}
@@ -1279,6 +1285,12 @@ func (cs *ConsensusState) addProposalBlock(proposalBlock *tmtypes.TendermintBloc
 		return nil
 	}
 
+	if multiBlocks > 1 && block.Header.BlockHeight <= cs.client.GetCurrentHeight() {
+		tendermintlog.Info("invalid proposalBlock BlockHeight", "blockHeight", block.Header.BlockHeight,
+			"currentHeight", cs.client.GetCurrentHeight())
+		return nil
+	}
+
 	if cs.begCons.IsZero() {
 		cs.begCons = time.Now()
 	}
@@ -1302,7 +1314,7 @@ func (cs *ConsensusState) addProposalBlock(proposalBlock *tmtypes.TendermintBloc
 
 	// NOTE: it's possible to receive proposal block for future rounds without having the proposal
 	tendermintlog.Info(fmt.Sprintf("Consensus set proposal block. Current: %v/%v/%v", cs.Height, cs.Round, cs.Step),
-		"ProposalBlockHash", fmt.Sprintf("%X", cs.ProposalBlockHash), "cost", types.Since(cs.begCons))
+		"ProposalBlockHash", fmt.Sprintf("%X", cs.ProposalBlockHash), "blockHeight", block.Header.BlockHeight, "cost", types.Since(cs.begCons))
 
 	// Update Valid* if we can.
 	prevotes := cs.Votes.Prevotes(cs.Round)

@@ -28,6 +28,10 @@ var (
 	ErrBaseExecErr = errors.New("ErrBaseExecErr")
 	// ErrLastBlockID error type
 	ErrLastBlockID = errors.New("ErrLastBlockID")
+	// ErrBlockInfoHeight error type
+	ErrBlockInfoHeight = errors.New("ErrBlockInfoHeight")
+	// ErrBlockSequence error type
+	ErrBlockSequence = errors.New("ErrBlockSequence")
 )
 
 var (

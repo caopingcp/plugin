@@ -82,7 +82,7 @@ func updateState(s State, blockID ttypes.BlockID, block *ttypes.TendermintBlock)
 	// It will be filled on state.Save.
 	return State{
 		ChainID:                          s.ChainID,
-		LastBlockHeight:                  block.Header.Height,
+		LastHeight:                       block.Header.Height,
 		LastBlockTotalTx:                 s.LastBlockTotalTx + block.Header.NumTxs,
 		LastBlockID:                      blockID,
 		LastBlockTime:                    block.Header.Time,
@@ -192,8 +192,8 @@ func validateBlock(stateDB *CSStateDB, s State, b *ttypes.TendermintBlock) error
 	if b.Header.ChainID != s.ChainID {
 		return fmt.Errorf("Wrong Block.Header.ChainID. Expected %v, got %v", s.ChainID, b.Header.ChainID)
 	}
-	if b.Header.Height != s.LastBlockHeight+1 {
-		return fmt.Errorf("Wrong Block.Header.Height. Expected %v, got %v", s.LastBlockHeight+1, b.Header.Height)
+	if b.Header.Height != s.LastHeight+1 {
+		return fmt.Errorf("Wrong Block.Header.Height. Expected %v, got %v", s.LastHeight+1, b.Header.Height)
 	}
 
 	// validate prev block info

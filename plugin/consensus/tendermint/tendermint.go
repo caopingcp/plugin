@@ -14,6 +14,7 @@ import (
 	"github.com/33cn/chain33/common/crypto"
 	dbm "github.com/33cn/chain33/common/db"
 	"github.com/33cn/chain33/common/log/log15"
+	"github.com/33cn/chain33/common/merkle"
 	"github.com/33cn/chain33/queue"
 	drivers "github.com/33cn/chain33/system/consensus"
 	cty "github.com/33cn/chain33/system/dapp/coins/types"
@@ -51,8 +52,10 @@ var (
 	peerQueryMaj23SleepDuration int32 = 2000
 	zeroHash                    [32]byte
 	random                      *rand.Rand
-	signName                    = "ed25519"
-	useAggSig                   = false
+	signName                          = "ed25519"
+	useAggSig                         = false
+	multiBlocks                 int64 = 1
+	timeoutChangeProposer       int64 = 5000
 )
 
 func init() {
@@ -96,6 +99,8 @@ type subConfig struct {
 	PreExec                   bool     `json:"preExec"`
 	SignName                  string   `json:"signName"`
 	UseAggregateSignature     bool     `json:"useAggregateSignature"`
+	MultiBlocks               int64    `json:"multiBlocks"`
+	TimeoutChangeProposer     int64    `json:"timeoutChangeProposer"`
 }
 
 func applyConfig(sub []byte) {
@@ -150,6 +155,12 @@ func applyConfig(sub []byte) {
 		signName = subcfg.SignName
 	}
 	useAggSig = subcfg.UseAggregateSignature
+	if subcfg.MultiBlocks > 0 {
+		multiBlocks = subcfg.MultiBlocks
+	}
+	if subcfg.TimeoutChangeProposer > 0 {
+		timeoutChangeProposer = subcfg.TimeoutChangeProposer
+	}
 }
 
 // DefaultDBProvider returns a database using the DBBackend and DBDir
@@ -280,7 +291,7 @@ OuterLoop:
 			panic("StartConsensus GenesisState fail")
 		}
 		state = genState.Copy()
-	} else if client.GetCurrentHeight() <= client.csStore.LoadStateHeight() {
+	} else if client.GetConsensusHeight() <= client.csStore.LoadStateHeight() {
 		stoState := client.csStore.LoadStateFromStore()
 		if stoState == nil {
 			panic("StartConsensus LoadStateFromStore fail")
@@ -288,7 +299,7 @@ OuterLoop:
 		state = LoadState(stoState)
 		tendermintlog.Info("Load state from store")
 	} else {
-		height := client.GetCurrentHeight()
+		height := client.GetConsensusHeight()
 		blkState := client.LoadBlockState(height)
 		if blkState == nil {
 			panic("StartConsensus LoadBlockState fail")
@@ -327,7 +338,7 @@ OuterLoop:
 	// Make ConsensusReactor
 	csState := NewConsensusState(client, state, blockExec)
 	// reset height, round, state begin at newheigt,0,0
-	client.privValidator.ResetLastHeight(state.LastBlockHeight)
+	client.privValidator.ResetLastHeight(state.LastHeight)
 	csState.SetPrivValidator(client.privValidator)
 
 	client.csState = csState
@@ -361,6 +372,17 @@ func (client *Client) CreateGenesisTx() (ret []*types.Transaction) {
 	return
 }
 
+func (client *Client) GetConsensusHeight() int64 {
+	if multiBlocks > 1 {
+		info, err := client.getLastBlockInfo()
+		if err != nil {
+			return -1
+		}
+		return info.Block.Header.Height
+	}
+	return client.GetCurrentHeight()
+}
+
 func (client *Client) getBlockInfoTx(current *types.Block) (*tmtypes.ValNodeAction, error) {
 	//检查第一笔交易
 	if len(current.Txs) == 0 {
@@ -390,10 +412,6 @@ func (client *Client) CheckBlock(parent *types.Block, current *types.BlockDetail
 	if current.Block.Difficulty != cfg.GetP(0).PowLimitBits {
 		return types.ErrBlockHeaderDifficulty
 	}
-	valAction, err := client.getBlockInfoTx(current.Block)
-	if err != nil {
-		return err
-	}
 	if parent.Height+1 != current.Block.Height {
 		return types.ErrBlockHeight
 	}
@@ -401,13 +419,30 @@ func (client *Client) CheckBlock(parent *types.Block, current *types.BlockDetail
 	if current.Receipts[0].Ty != types.ExecOk {
 		return ttypes.ErrBaseExecErr
 	}
+	valAction, err := client.getBlockInfoTx(current.Block)
+	if err != nil {
+		return err
+	}
 	info := valAction.GetBlockInfo()
+	if current.Block.Height != info.Block.Header.BlockHeight {
+		return ttypes.ErrBlockInfoHeight
+	}
 	if current.Block.Height > 1 {
 		lastValAction, err := client.getBlockInfoTx(parent)
 		if err != nil {
 			return err
 		}
 		lastInfo := lastValAction.GetBlockInfo()
+		if multiBlocks > 1 {
+			if lastInfo.Block.Header.Height == info.Block.Header.Height {
+				if lastInfo.Block.Header.BlockSequence+1 != info.Block.Header.BlockSequence {
+					return ttypes.ErrBlockSequence
+				} else {
+					return nil
+				}
+			}
+		}
+		//切换提议节点进行检查
 		lastProposalBlock := &ttypes.TendermintBlock{TendermintBlock: lastInfo.GetBlock()}
 		if !lastProposalBlock.HashesTo(info.Block.Header.LastBlockID.Hash) {
 			return ttypes.ErrLastBlockID
@@ -424,7 +459,7 @@ func (client *Client) ProcEvent(msg *queue.Message) bool {
 
 // CreateBlock a routine monitor whether some transactions available and tell client by available channel
 func (client *Client) CreateBlock() {
-	issleep := true
+	cfg := client.GetQueueClient().GetConfig()
 	for {
 		if client.IsClosed() {
 			tendermintlog.Info("CreateBlock quit")
@@ -432,23 +467,56 @@ func (client *Client) CreateBlock() {
 		}
 		if !client.csState.IsRunning() {
 			tendermintlog.Info("consensus not running")
-			time.Sleep(time.Second)
+			time.Sleep(500 * time.Millisecond)
 			continue
 		}
 
-		if issleep {
-			time.Sleep(time.Second)
-		}
 		height, err := client.getLastHeight()
 		if err != nil {
-			issleep = true
+			time.Sleep(500 * time.Millisecond)
 			continue
 		}
 		if !client.CheckTxsAvailable(height) {
-			issleep = true
+			time.Sleep(500 * time.Millisecond)
 			continue
 		}
-		issleep = false
+
+		if height > 0 && multiBlocks > 1 {
+			info, err := client.getLastBlockInfo()
+			if err != nil {
+				continue
+			}
+			csHeight := info.Block.Header.Height
+			seq := info.Block.Header.BlockSequence
+			proposerAddr := info.Block.Header.ProposerAddr
+			if seq+1 < multiBlocks {
+				if bytes.Equal(proposerAddr, client.privValidator.GetAddress()) {
+					block := client.BuildBlock()
+					tmtBlock := info.Block
+					tmtBlock.Header.BlockHeight = block.Height
+					tmtBlock.Header.BlockSequence = seq + 1
+					baseTx := CreateBlockInfoTx(client.pubKey, info.State, tmtBlock)
+					block.Txs[0] = baseTx
+					if cfg.IsFork(block.Height, "ForkRootHash") {
+						block.Txs = types.TransactionSort(block.Txs)
+					}
+					block.TxHash = merkle.CalcMerkleRoot(cfg, block.Height, block.Txs)
+					err = client.WriteBlock(nil, block)
+					if err != nil {
+						tendermintlog.Error("WriteBlock fail", "err", err)
+					}
+					time.Sleep(time.Duration(timeoutTxAvail) * time.Millisecond)
+					continue
+				} else {
+					if client.WaitBlockSequence(csHeight, seq+1, timeoutChangeProposer) {
+						continue
+					}
+					tendermintlog.Info("Will change proposer", "height", csHeight+1)
+				}
+			}
+			//client.WaitMajorPeerHeight(height)
+			height = csHeight
+		}
 
 		client.txsAvailable <- height + 1
 		time.Sleep(time.Duration(timeoutTxAvail) * time.Millisecond)
@@ -461,6 +529,97 @@ func (client *Client) getLastHeight() (int64, error) {
 		return -1, err
 	}
 	return lastBlock.Height, nil
+}
+
+func (client *Client) getLastBlockInfo() (*tmtypes.TendermintBlockInfo, error) {
+	lastBlock, err := client.RequestLastBlock()
+	if err != nil {
+		return nil, err
+	}
+	if lastBlock.Height == 0 {
+		return nil, nil
+	}
+	valAction, err := client.getBlockInfoTx(lastBlock)
+	if err != nil {
+		return nil, err
+	}
+	return valAction.GetBlockInfo(), nil
+}
+
+// WaitBlock by height
+func (client *Client) WaitBlockSequence(height int64, seq int64, interval int64) bool {
+	retry := int64(0)
+	newHeight := int64(0)
+	newSeq := int64(0)
+	for {
+		info, err := client.getLastBlockInfo()
+		if err == nil {
+			newHeight = info.Block.Header.Height
+			newSeq = info.Block.Header.BlockSequence
+			if newHeight == height && newSeq >= seq {
+				return true
+			}
+		}
+		retry++
+		time.Sleep(100 * time.Millisecond)
+		if retry >= interval/100 {
+			tendermintlog.Error("Wait block sequence fail", "height", height, "seq", seq,
+				"currentHeight", newHeight, "currentSeq", newSeq)
+			return false
+		}
+	}
+}
+
+// WaitMajorPeerHeight wait majority peer height
+func (client *Client) WaitMajorPeerHeight(height int64) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	beg := time.Now()
+OuterLoop:
+	for {
+		select {
+		case <-ticker.C:
+			tendermintlog.Info("Still waiting majority peers......", "height", height, "cost", time.Since(beg))
+		default:
+			peerlist, err := client.fetchPeerList()
+			if err == nil {
+				total := len(peerlist.Peers)
+				count := 0
+				for _, peer := range peerlist.Peers {
+					if peer == nil {
+						continue
+					} else if peer.Header.Height >= height {
+						count++
+						if count >= total*2/3+1 {
+							tendermintlog.Info("Majority peers catch up", "height", height)
+							break OuterLoop
+						}
+					}
+				}
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+}
+
+func (client *Client) fetchPeerList() (*types.PeerList, error) {
+	msg := client.GetQueueClient().NewMessage("p2p", types.EventPeerInfo, nil)
+	err := client.GetQueueClient().SendTimeout(msg, true, 5*time.Second)
+	if err != nil {
+		tendermintlog.Error("fetchPeerList", "client.Send err:", err)
+		return nil, err
+	}
+	resp, err := client.GetQueueClient().WaitTimeout(msg, 10*time.Second)
+	if err != nil {
+		tendermintlog.Error("fetchPeerList", "client.Wait err:", err)
+		return nil, err
+	}
+	peerlist := resp.GetData().(*types.PeerList)
+	if peerlist == nil {
+		return nil, types.ErrNoPeer
+	}
+	return peerlist, nil
 }
 
 // TxsAvailable check available channel
@@ -540,9 +699,13 @@ func (client *Client) BuildBlock() *types.Block {
 // CommitBlock call WriteBlock to commit to chain
 func (client *Client) CommitBlock(block *types.Block) error {
 	cfg := client.GetAPI().GetConfig()
-	retErr := client.WriteBlock(nil, block)
-	if retErr != nil {
-		tendermintlog.Info("CommitBlock fail", "err", retErr)
+	retry := 0
+	for {
+		retErr := client.WriteBlock(nil, block)
+		if retErr == nil {
+			return nil
+		}
+		tendermintlog.Info("Write block fail", "tries", retry, "err", retErr)
 		if client.WaitBlock(block.Height) {
 			if !preExec {
 				return nil
@@ -560,9 +723,12 @@ func (client *Client) CommitBlock(block *types.Block) error {
 				}
 			}
 		}
-		return retErr
+		retry++
+		if retry >= 5 {
+			tendermintlog.Error("Commit block fail", "height", block.Height)
+			return retErr
+		}
 	}
-	return nil
 }
 
 // WaitBlock by height
@@ -574,9 +740,9 @@ func (client *Client) WaitBlock(height int64) bool {
 			return true
 		}
 		retry++
-		time.Sleep(100 * time.Millisecond)
-		if retry >= 100 {
-			tendermintlog.Error("Wait block fail", "height", height, "CurrentHeight", newHeight)
+		time.Sleep(200 * time.Millisecond)
+		if retry >= 10 {
+			tendermintlog.Info("Wait block fail", "height", height, "CurrentHeight", newHeight)
 			return false
 		}
 	}
@@ -595,12 +761,12 @@ func (client *Client) QueryValidatorsByHeight(height int64) (*tmtypes.ValNodes, 
 	}
 	msg := client.GetQueueClient().NewMessage("execs", types.EventBlockChainQuery,
 		&types.ChainExecutor{Driver: "valnode", FuncName: "GetValNodeByHeight", StateHash: zeroHash[:], Param: param})
-	err = client.GetQueueClient().Send(msg, true)
+	err = client.GetQueueClient().SendTimeout(msg, true, 5*time.Second)
 	if err != nil {
 		tendermintlog.Error("QueryValidatorsByHeight send", "err", err)
 		return nil, err
 	}
-	msg, err = client.GetQueueClient().Wait(msg)
+	msg, err = client.GetQueueClient().WaitTimeout(msg, 10*time.Second)
 	if err != nil {
 		tendermintlog.Info("QueryValidatorsByHeight result", "err", err)
 		return nil, err
@@ -612,6 +778,28 @@ func (client *Client) QueryValidatorsByHeight(height int64) (*tmtypes.ValNodes, 
 func (client *Client) QueryBlockInfoByHeight(height int64) (*tmtypes.TendermintBlockInfo, *types.Block, error) {
 	if height < 1 {
 		return nil, nil, ttypes.ErrHeightLessThanOne
+	}
+	if multiBlocks > 1 {
+		req := &tmtypes.ReqBlockInfo{Height: height}
+		param, err := proto.Marshal(req)
+		if err != nil {
+			tendermintlog.Error("QueryBlockInfoByHeight marshal", "err", err)
+			return nil, nil, types.ErrInvalidParam
+		}
+		msg := client.GetQueueClient().NewMessage("execs", types.EventBlockChainQuery,
+			&types.ChainExecutor{Driver: "valnode", FuncName: "GetBlockInfoByHeight", StateHash: zeroHash[:], Param: param})
+		err = client.GetQueueClient().SendTimeout(msg, true, 5*time.Second)
+		if err != nil {
+			tendermintlog.Error("QueryBlockInfoByHeight send", "err", err)
+			return nil, nil, err
+		}
+		msg, err = client.GetQueueClient().WaitTimeout(msg, 10*time.Second)
+		if err != nil {
+			tendermintlog.Info("QueryBlockInfoByHeight result", "err", err)
+			return nil, nil, err
+		}
+		info := msg.GetData().(types.Message).(*tmtypes.TendermintBlockInfo)
+		height = info.Block.Header.BlockHeight
 	}
 	block, err := client.RequestBlock(height)
 	if err != nil {

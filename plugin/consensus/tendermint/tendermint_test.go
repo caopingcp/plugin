@@ -268,15 +268,15 @@ func CheckState(t *testing.T, client *Client) {
 
 	genState, err := MakeGenesisStateFromFile("genesis.json")
 	assert.Nil(t, err)
-	assert.Equal(t, genState.LastBlockHeight, int64(0))
+	assert.Equal(t, genState.LastHeight, int64(0))
 
 	assert.Equal(t, client.csState.Prevote(0), 1000*time.Millisecond)
 	assert.Equal(t, client.csState.Precommit(0), 1000*time.Millisecond)
 	assert.Equal(t, client.csState.PeerGossipSleep(), 200*time.Millisecond)
 	assert.Equal(t, client.csState.PeerQueryMaj23Sleep(), 2000*time.Millisecond)
 	assert.Equal(t, client.csState.IsProposer(), true)
-	assert.Nil(t, client.csState.GetPrevotesState(state.LastBlockHeight, 0, nil))
-	assert.Nil(t, client.csState.GetPrecommitsState(state.LastBlockHeight, 0, nil))
+	assert.Nil(t, client.csState.GetPrevotesState(state.LastHeight, 0, nil))
+	assert.Nil(t, client.csState.GetPrecommitsState(state.LastHeight, 0, nil))
 	assert.Len(t, client.GenesisDoc().Validators, 1)
 
 	msg1, err := client.Query_IsHealthy(&types.ReqNil{})

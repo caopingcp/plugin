@@ -178,7 +178,24 @@ func (h *Header) Hash() []byte {
 	if len(h.ValidatorsHash) == 0 {
 		return nil
 	}
-	bytes, err := json.Marshal(h)
+	hcopy := Header{
+		&tmtypes.TendermintBlockHeader{
+			ChainID:         h.ChainID,
+			Height:          h.Height,
+			Round:           h.Round,
+			Time:            h.Time,
+			NumTxs:          h.NumTxs,
+			TotalTxs:        h.TotalTxs,
+			LastBlockID:     h.LastBlockID,
+			LastCommitHash:  h.LastCommitHash,
+			ValidatorsHash:  h.ValidatorsHash,
+			ConsensusHash:   h.ConsensusHash,
+			AppHash:         h.AppHash,
+			LastResultsHash: h.LastResultsHash,
+			ProposerAddr:    h.ProposerAddr,
+		},
+	}
+	bytes, err := json.Marshal(hcopy)
 	if err != nil {
 		ttlog.Error("block header Hash() marshal failed", "error", err)
 		return nil
@@ -194,6 +211,7 @@ func (h *Header) StringIndented(indent string) string {
 	return Fmt(`Header{
 %s  ChainID:        %v
 %s  Height:         %v
+%s  Round:          %v
 %s  Time:           %v
 %s  NumTxs:         %v
 %s  TotalTxs:       %v
@@ -203,9 +221,13 @@ func (h *Header) StringIndented(indent string) string {
 %s  App:            %v
 %s  Conensus:       %v
 %s  Results:        %v
+%s  ProposerAddr:   %v
+%s  BlockHeight:    %v
+%s  BlockSequence:  %v
 %s}#%v`,
 		indent, h.ChainID,
 		indent, h.Height,
+		indent, h.Round,
 		indent, time.Unix(0, h.Time),
 		indent, h.NumTxs,
 		indent, h.TotalTxs,
@@ -215,6 +237,9 @@ func (h *Header) StringIndented(indent string) string {
 		indent, h.AppHash,
 		indent, h.ConsensusHash,
 		indent, h.LastResultsHash,
+		indent, h.ProposerAddr,
+		indent, h.BlockHeight,
+		indent, h.BlockSequence,
 		indent, h.Hash())
 }
 

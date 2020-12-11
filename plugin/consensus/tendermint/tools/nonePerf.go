@@ -88,7 +88,7 @@ func LoadHelp() {
 	fmt.Println("valnode [ip, pubkey, power]                                  : 增加/删除/修改tendermint节点")
 }
 
-// Perf ...
+// Perf 性能测试
 func Perf(ip, txsize, num, sleepinterval, totalduration string) {
 	var numThread int
 	numInt, err := strconv.Atoi(num)
@@ -101,11 +101,11 @@ func Perf(ip, txsize, num, sleepinterval, totalduration string) {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-	//durInt, err := strconv.Atoi(totalduration)
-	//if err != nil {
-	//	fmt.Fprintln(os.Stderr, err)
-	//	return
-	//}
+	durInt, err := strconv.Atoi(totalduration)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
 	sizeInt, _ := strconv.Atoi(txsize)
 	if numInt < 10 {
 		numThread = 1
@@ -116,9 +116,12 @@ func Perf(ip, txsize, num, sleepinterval, totalduration string) {
 	}
 	numThread = runtime.NumCPU()
 	ch := make(chan struct{}, numThread)
+	chSend := make(chan struct{}, numThread*2)
 	txChan := make(chan *types.Transaction, numInt)
 	//payload := RandStringBytes(sizeInt)
 	var blockHeight int64
+	total := int64(0)
+	success := int64(0)
 
 	go func() {
 		ch <- struct{}{}
@@ -134,7 +137,7 @@ func Perf(ip, txsize, num, sleepinterval, totalduration string) {
 				//conn = newGrpcConn(ip)
 				//gcli = types.NewChain33Client(conn)
 				time.Sleep(time.Second)
-			}else {
+			} else {
 				atomic.StoreInt64(&blockHeight, height)
 			}
 			time.Sleep(time.Millisecond * 500)
@@ -145,44 +148,46 @@ func Perf(ip, txsize, num, sleepinterval, totalduration string) {
 	for i := 0; i < numThread; i++ {
 		go func() {
 			_, priv := genaddress()
-			for {
+			for sec := 0; durInt == 0 || sec < durInt; sec++ {
 
 				height := atomic.LoadInt64(&blockHeight)
 				for txs := 0; txs < numInt/numThread; txs++ {
+					//构造存证交易
 					tx := txPool.Get().(*types.Transaction)
 					tx.To = execAddr
 					tx.Fee = rand.Int63()
 					tx.Nonce = time.Now().UnixNano()
 					tx.Expire = height + types.TxHeightFlag + types.LowAllowPackHeight
 					tx.Payload = RandStringBytes(sizeInt)
+					//交易签名
 					tx.Sign(types.SECP256K1, priv)
 					txChan <- tx
 				}
 				if sleep > 0 {
-					time.Sleep(time.Second)
+					time.Sleep(100 * time.Millisecond)
 				}
 			}
+			ch <- struct{}{}
 		}()
 	}
 
-
-
-	for i:=0; i< numThread*2; i++ {
+	for i := 0; i < numThread*2; i++ {
 		go func() {
 			conn := newGrpcConn(ip)
 			defer conn.Close()
 			gcli := types.NewChain33Client(conn)
 
-
 			for tx := range txChan {
+				//发送交易
 				_, err := gcli.SendTransaction(context.Background(), tx, grpc.UseCompressor("gzip"))
 
 				txPool.Put(tx)
+				atomic.AddInt64(&total, 1)
 				if err != nil {
-					if strings.Contains(err.Error(), "ErrTxExpire"){
+					if strings.Contains(err.Error(), "ErrTxExpire") {
 						continue
 					}
-					if strings.Contains(err.Error(), "ErrMemFull"){
+					if strings.Contains(err.Error(), "ErrMemFull") {
 						time.Sleep(time.Second)
 						continue
 					}
@@ -192,18 +197,29 @@ func Perf(ip, txsize, num, sleepinterval, totalduration string) {
 					//conn.Close()
 					//conn = newGrpcConn(ip)
 					//gcli = types.NewChain33Client(conn)
+				} else {
+					atomic.AddInt64(&success, 1)
 				}
 			}
+			chSend <- struct{}{}
 		}()
 	}
 
 	for j := 0; j < numThread; j++ {
 		<-ch
 	}
+	close(txChan)
+	for k := 0; k < numThread*2; k++ {
+		<-chSend
+	}
+	//打印发送的交易总数
+	log.Info("sendtx total tx", "total", total)
+	//打印成功发送的交易总数
+	log.Info("sendtx success tx", "success", success)
 }
 
 var (
-	log = log15.New()
+	log      = log15.New()
 	execAddr = address.ExecAddress("user.write")
 )
 
@@ -217,13 +233,13 @@ func getHeight(gcli types.Chain33Client) (int64, error) {
 }
 
 var txPool = sync.Pool{
-	New: func() interface{}{
+	New: func() interface{} {
 		tx := &types.Transaction{Execer: []byte("user.write")}
 		return tx
 	},
 }
 
-func newGrpcConn(host string) *grpc.ClientConn{
+func newGrpcConn(host string) *grpc.ClientConn {
 
 	conn, err := grpc.Dial(host, grpc.WithInsecure())
 	for err != nil {

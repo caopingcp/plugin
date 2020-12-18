@@ -27,8 +27,10 @@ message Vote {
 
 message TendermintCommit {
     BlockID  blockID         = 1;
-    repeated Vote precommits = 2;
-    AggVote  aggVote         = 3;
+    repeated Vote prevotes   = 2;
+    repeated Vote precommits = 3;
+    AggVote  aggVote         = 4;
+    uint32   voteType        = 5;
 }
 
 message TendermintBlockInfo {
@@ -87,6 +89,9 @@ message State {
     int64           lastHeightConsensusParamsChanged = 10;
     bytes           lastResultsHash                  = 11;
     bytes           appHash                          = 12;
+    int64           sequence                         = 13;
+    int64           lastSequence                     = 14;
+    int64           lastCommitRound                  = 15;
 }
 
 message TendermintBlockHeader {
@@ -103,6 +108,8 @@ message TendermintBlockHeader {
     bytes   appHash         = 11;
     bytes   lastResultsHash = 12;
     bytes   proposerAddr    = 13;
+    int64   sequence        = 14;
+    int64   lastSequence    = 15;
 }
 
 message TendermintBlock {
@@ -119,6 +126,7 @@ message Proposal {
     BlockID POLBlockID = 5;
     bytes   signature  = 6;
     bytes   blockhash  = 7;
+    int64   sequence   = 8;
 }
 
 message NewRoundStepMsg {

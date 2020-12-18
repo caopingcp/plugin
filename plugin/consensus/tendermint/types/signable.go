@@ -56,7 +56,7 @@ type Proposal struct {
 
 // NewProposal returns a new Proposal.
 // If there is no POLRound, polRound should be -1.
-func NewProposal(height int64, round int, blockhash []byte, polRound int, polBlockID tmtypes.BlockID) *Proposal {
+func NewProposal(height int64, round int, blockhash []byte, polRound int, polBlockID tmtypes.BlockID, seq int64) *Proposal {
 	return &Proposal{tmtypes.Proposal{
 		Height:     height,
 		Round:      int32(round),
@@ -64,15 +64,16 @@ func NewProposal(height int64, round int, blockhash []byte, polRound int, polBlo
 		POLRound:   int32(polRound),
 		POLBlockID: &polBlockID,
 		Blockhash:  blockhash,
+		Sequence:   seq,
 	},
 	}
 }
 
 // String returns a string representation of the Proposal.
 func (p *Proposal) String() string {
-	return fmt.Sprintf("Proposal{%v/%v (%v, %X) %X %X @ %s}",
-		p.Height, p.Round, p.POLRound, p.POLBlockID,
-		p.Blockhash, p.Signature, CanonicalTime(time.Unix(0, p.Timestamp)))
+	return fmt.Sprintf("Proposal{%v/%v (%v, %X) %X %X %v @ %s}",
+		p.Height, p.Round, p.POLRound, p.POLBlockID.Hash,
+		p.Blockhash, p.Signature, p.Sequence, CanonicalTime(time.Unix(0, p.Timestamp)))
 }
 
 // WriteSignBytes writes the Proposal bytes for signing
@@ -122,6 +123,7 @@ func (heartbeat *Heartbeat) WriteSignBytes(chainID string, w io.Writer, n *int, 
 // Types of votes
 // TODO Make a new type "VoteType"
 const (
+	VoteTypeNone      = byte(0x0)
 	VoteTypePrevote   = byte(0x01)
 	VoteTypePrecommit = byte(0x02)
 )

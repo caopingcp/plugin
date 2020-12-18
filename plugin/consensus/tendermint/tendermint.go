@@ -51,8 +51,9 @@ var (
 	peerQueryMaj23SleepDuration int32 = 2000
 	zeroHash                    [32]byte
 	random                      *rand.Rand
-	signName                    = "ed25519"
-	useAggSig                   = false
+	signName                          = "ed25519"
+	useAggSig                         = false
+	multiBlocks                 int64 = 1
 )
 
 func init() {
@@ -96,6 +97,7 @@ type subConfig struct {
 	PreExec                   bool     `json:"preExec"`
 	SignName                  string   `json:"signName"`
 	UseAggregateSignature     bool     `json:"useAggregateSignature"`
+	MultiBlocks               int64    `json:"multiBlocks"`
 }
 
 func applyConfig(sub []byte) {
@@ -150,6 +152,9 @@ func applyConfig(sub []byte) {
 		signName = subcfg.SignName
 	}
 	useAggSig = subcfg.UseAggregateSignature
+	if subcfg.MultiBlocks > 0 {
+		multiBlocks = subcfg.MultiBlocks
+	}
 }
 
 // DefaultDBProvider returns a database using the DBBackend and DBDir
@@ -306,12 +311,11 @@ OuterLoop:
 		}
 		tendermintlog.Info("Save state from block")
 	}
-	tendermintlog.Debug("Load state finish", "state", state)
 
 	// start
 	tendermintlog.Info("StartConsensus",
 		"privValidator", fmt.Sprintf("%X", ttypes.Fingerprint(client.privValidator.GetAddress())),
-		"Validators", state.Validators.String())
+		"state", state.String())
 	// Log whether this node is a validator or an observer
 	if state.Validators.HasAddress(client.privValidator.GetAddress()) {
 		tendermintlog.Info("This node is a validator")
@@ -629,6 +633,12 @@ func (client *Client) LoadBlockCommit(height int64) *tmtypes.TendermintCommit {
 	blockInfo, _, err := client.QueryBlockInfoByHeight(height)
 	if err != nil {
 		tendermintlog.Error("LoadBlockCommit GetBlockInfo fail", "err", err)
+		return nil
+	}
+	seq, voteType := blockInfo.State.LastSequence, blockInfo.Block.LastCommit.VoteType
+	if (seq == 0 && voteType != uint32(ttypes.VoteTypePrecommit)) ||
+		(seq > 0 && voteType != uint32(ttypes.VoteTypePrevote)) {
+		tendermintlog.Error("LoadBlockCommit wrong VoteType", "seq", seq, "voteType", voteType)
 		return nil
 	}
 	return blockInfo.GetBlock().GetLastCommit()

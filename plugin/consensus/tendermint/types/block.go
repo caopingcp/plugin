@@ -85,19 +85,21 @@ func (b *TendermintBlock) ValidateBasic() error {
 		return errors.New("Negative Header.TotalTxs")
 	}
 
-	lastCommit := Commit{
-		TendermintCommit: b.LastCommit,
-	}
-	if b.Header.Height > 1 {
-		if b.LastCommit == nil {
-			return errors.New("nil LastCommit")
+	if b.Header.LastSequence == 0 {
+		lastCommit := Commit{
+			TendermintCommit: b.LastCommit,
 		}
-		if err := lastCommit.ValidateBasic(); err != nil {
-			return err
+		if b.Header.Height > 1 {
+			if b.LastCommit == nil {
+				return errors.New("nil LastCommit")
+			}
+			if err := lastCommit.ValidateBasic(); err != nil {
+				return err
+			}
 		}
-	}
-	if !bytes.Equal(b.Header.LastCommitHash, lastCommit.Hash()) {
-		return fmt.Errorf("Wrong Header.LastCommitHash.  Expected %v, got %v", b.Header.LastCommitHash, lastCommit.Hash())
+		if !bytes.Equal(b.Header.LastCommitHash, lastCommit.Hash()) {
+			return fmt.Errorf("Wrong Header.LastCommitHash.  Expected %v, got %v", b.Header.LastCommitHash, lastCommit.Hash())
+		}
 	}
 
 	return nil
@@ -201,8 +203,11 @@ func (h *Header) StringIndented(indent string) string {
 %s  LastCommit:     %v
 %s  Validators:     %v
 %s  App:            %v
-%s  Conensus:       %v
+%s  Consensus:      %v
 %s  Results:        %v
+%s  ProposerAddr:   %v
+%s  Sequence:       %v
+%s  LastSequence:   %v
 %s}#%v`,
 		indent, h.ChainID,
 		indent, h.Height,
@@ -215,26 +220,38 @@ func (h *Header) StringIndented(indent string) string {
 		indent, h.AppHash,
 		indent, h.ConsensusHash,
 		indent, h.LastResultsHash,
+		indent, h.ProposerAddr,
+		indent, h.Sequence,
+		indent, h.LastSequence,
 		indent, h.Hash())
 }
 
 // Commit struct
 type Commit struct {
 	*tmtypes.TendermintCommit
-	hash           []byte
-	bitArray       *BitArray
-	firstPrecommit *tmtypes.Vote
+	hash      []byte
+	bitArray  *BitArray
+	firstVote *tmtypes.Vote
 }
 
-// FirstPrecommit returns the first non-nil precommit in the commit
-func (commit *Commit) FirstPrecommit() *tmtypes.Vote {
-	if commit.firstPrecommit != nil {
-		return commit.firstPrecommit
+// FirstVote returns the first non-nil prevote/precommit in the commit
+func (commit *Commit) FirstVote() *tmtypes.Vote {
+	if commit.firstVote != nil {
+		return commit.firstVote
 	}
-	for _, precommit := range commit.Precommits {
-		if precommit != nil && len(precommit.Signature) > 0 {
-			commit.firstPrecommit = precommit
-			return precommit
+	if commit.VoteType == uint32(VoteTypePrecommit) {
+		for _, precommit := range commit.Precommits {
+			if precommit != nil && len(precommit.Signature) > 0 {
+				commit.firstVote = precommit
+				return precommit
+			}
+		}
+	} else {
+		for _, prevote := range commit.Prevotes {
+			if prevote != nil && len(prevote.Signature) > 0 {
+				commit.firstVote = prevote
+				return prevote
+			}
 		}
 	}
 	return nil
@@ -245,10 +262,12 @@ func (commit *Commit) Height() int64 {
 	if commit.AggVote != nil {
 		return commit.AggVote.Height
 	}
-	if len(commit.Precommits) == 0 {
-		return 0
+	if commit.VoteType == uint32(VoteTypePrecommit) && len(commit.Precommits) == 0 {
+		return -1
+	} else if commit.VoteType == uint32(VoteTypePrevote) && len(commit.Prevotes) == 0 {
+		return -1
 	}
-	return commit.FirstPrecommit().Height
+	return commit.FirstVote().Height
 }
 
 // Round returns the round of the commit
@@ -256,15 +275,17 @@ func (commit *Commit) Round() int {
 	if commit.AggVote != nil {
 		return int(commit.AggVote.Round)
 	}
-	if len(commit.Precommits) == 0 {
-		return 0
+	if commit.VoteType == uint32(VoteTypePrecommit) && len(commit.Precommits) == 0 {
+		return -1
+	} else if commit.VoteType == uint32(VoteTypePrevote) && len(commit.Prevotes) == 0 {
+		return -1
 	}
-	return int(commit.FirstPrecommit().Round)
+	return int(commit.FirstVote().Round)
 }
 
 // Type returns the vote type of the commit, which is always VoteTypePrecommit
 func (commit *Commit) Type() byte {
-	return VoteTypePrecommit
+	return byte(commit.VoteType)
 }
 
 // Size returns the number of votes in the commit
@@ -272,7 +293,10 @@ func (commit *Commit) Size() int {
 	if commit == nil {
 		return 0
 	}
-	return len(commit.Precommits)
+	if commit.VoteType == uint32(VoteTypePrecommit) {
+		return len(commit.Precommits)
+	}
+	return len(commit.Prevotes)
 }
 
 // BitArray returns a BitArray of which validators voted in this commit
@@ -282,11 +306,18 @@ func (commit *Commit) BitArray() *BitArray {
 		return bitArray.copy()
 	}
 	if commit.bitArray == nil {
-		commit.bitArray = NewBitArray(len(commit.Precommits))
-		for i, precommit := range commit.Precommits {
-			// TODO: need to check the BlockID otherwise we could be counting conflicts,
-			// not just the one with +2/3 !
-			commit.bitArray.SetIndex(i, precommit.ValidatorAddress != nil)
+		if commit.VoteType == uint32(VoteTypePrecommit) {
+			commit.bitArray = NewBitArray(len(commit.Precommits))
+			for i, precommit := range commit.Precommits {
+				// TODO: need to check the BlockID otherwise we could be counting conflicts,
+				// not just the one with +2/3 !
+				commit.bitArray.SetIndex(i, precommit.ValidatorAddress != nil)
+			}
+		} else {
+			commit.bitArray = NewBitArray(len(commit.Prevotes))
+			for i, prevote := range commit.Prevotes {
+				commit.bitArray.SetIndex(i, prevote.ValidatorAddress != nil)
+			}
 		}
 	}
 	return commit.bitArray
@@ -294,17 +325,21 @@ func (commit *Commit) BitArray() *BitArray {
 
 // GetByIndex returns the vote corresponding to a given validator index
 func (commit *Commit) GetByIndex(index int) *Vote {
-	return &Vote{Vote: commit.Precommits[index]}
+	if commit.VoteType == uint32(VoteTypePrecommit) {
+		return &Vote{Vote: commit.Precommits[index]}
+	} else {
+		return &Vote{Vote: commit.Prevotes[index]}
+	}
 }
 
 // IsCommit returns true if there is at least one vote
 func (commit *Commit) IsCommit() bool {
-	return len(commit.Precommits) != 0 || commit.AggVote != nil
+	return len(commit.Precommits) != 0 || len(commit.Precommits) != 0 || commit.AggVote != nil
 }
 
 // GetAggVote ...
 func (commit *Commit) GetAggVote() *AggVote {
-	if commit == nil {
+	if commit.AggVote == nil {
 		return nil
 	}
 	aggVote := &AggVote{commit.AggVote}
@@ -317,11 +352,34 @@ func (commit *Commit) ValidateBasic() error {
 	if blockID.IsZero() {
 		return errors.New("Commit cannot be for nil block")
 	}
-	if len(commit.Precommits) == 0 {
-		return errors.New("No precommits in commit")
+	if len(commit.Prevotes) == 0 && len(commit.Precommits) == 0 {
+		return errors.New("No prevotes and precommits in commit")
 	}
 	height, round := commit.Height(), commit.Round()
 
+	// validate the prevotes
+	for _, item := range commit.Prevotes {
+		// may be nil if validator skipped.
+		if item == nil || len(item.Signature) == 0 {
+			continue
+		}
+		prevote := &Vote{Vote: item}
+		// Ensure that all votes are prevotes
+		if prevote.Type != uint32(VoteTypePrevote) {
+			return fmt.Errorf("Invalid commit vote. Expected prevote, got %v",
+				prevote.Type)
+		}
+		// Ensure that all heights are the same
+		if prevote.Height != height {
+			return fmt.Errorf("Invalid commit prevote height. Expected %v, got %v",
+				height, prevote.Height)
+		}
+		// Ensure that all rounds are the same
+		if int(prevote.Round) != round {
+			return fmt.Errorf("Invalid commit prevote round. Expected %v, got %v",
+				round, prevote.Round)
+		}
+	}
 	// validate the precommits
 	for _, item := range commit.Precommits {
 		// may be nil if validator skipped.
@@ -347,8 +405,8 @@ func (commit *Commit) ValidateBasic() error {
 	}
 	// validate the aggVote
 	if commit.AggVote != nil {
-		if commit.AggVote.Type != uint32(VoteTypePrecommit) {
-			return fmt.Errorf("Invalid aggVote type. Expected Precommit, got %v", commit.AggVote.Type)
+		if commit.AggVote.Type != commit.VoteType {
+			return fmt.Errorf("Invalid aggVote type. Expected %v, got %v", commit.VoteType, commit.AggVote.Type)
 		}
 		if commit.AggVote.Height != height {
 			return fmt.Errorf("Invalid aggVote height. Expected %v, got %v", height, commit.AggVote.Height)
@@ -366,13 +424,20 @@ func (commit *Commit) Hash() []byte {
 		if commit.AggVote != nil {
 			aggVote := &AggVote{AggVote: commit.AggVote}
 			commit.hash = aggVote.Hash()
-		} else {
-			bs := make([][]byte, len(commit.Precommits))
+		} else if commit.VoteType == uint32(VoteTypePrecommit) {
+			pc := make([][]byte, len(commit.Precommits))
 			for i, item := range commit.Precommits {
 				precommit := Vote{Vote: item}
-				bs[i] = precommit.Hash()
+				pc[i] = precommit.Hash()
 			}
-			commit.hash = merkle.GetMerkleRoot(bs)
+			commit.hash = merkle.GetMerkleRoot(pc)
+		} else {
+			pv := make([][]byte, len(commit.Prevotes))
+			for i, item := range commit.Prevotes {
+				prevote := Vote{Vote: item}
+				pv[i] = prevote.Hash()
+			}
+			commit.hash = merkle.GetMerkleRoot(pv)
 		}
 	}
 	return commit.hash
@@ -383,18 +448,26 @@ func (commit *Commit) StringIndented(indent string) string {
 	if commit == nil {
 		return "nil-Commit"
 	}
+	prevoteStrings := make([]string, len(commit.Prevotes))
+	for i, prevote := range commit.Prevotes {
+		prevoteStrings[i] = prevote.String()
+	}
 	precommitStrings := make([]string, len(commit.Precommits))
 	for i, precommit := range commit.Precommits {
 		precommitStrings[i] = precommit.String()
 	}
 	return Fmt(`Commit{
 %s  BlockID:    %v
+%s  Prevotes:   %v
 %s  Precommits: %v
 %s  AggVote:    %v
+%s  VoteType:   %v
 %s}#%v`,
 		indent, commit.BlockID,
+		indent, strings.Join(prevoteStrings, "\n"+indent+"  "),
 		indent, strings.Join(precommitStrings, "\n"+indent+"  "),
 		indent, commit.AggVote.String(),
+		indent, commit.VoteType,
 		indent, commit.hash)
 }
 

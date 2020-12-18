@@ -327,7 +327,7 @@ func (node *Node) UnicastRoutine() {
 			if peer.ID() == msg.PeerID {
 				success := peer.Send(msg)
 				if !success {
-					tendermintlog.Error("send failure in UnicastRoutine")
+					tendermintlog.Error("send failure in UnicastRoutine", "peerID", peer.ID())
 				}
 				break
 			}

@@ -71,8 +71,13 @@ func updateState(s State, blockID ttypes.BlockID, block *ttypes.TendermintBlock)
 	// update the validator set with the latest abciResponses
 	lastHeightValsChanged := s.LastHeightValidatorsChanged
 
-	// Update validator accums and set state variables
-	nextValSet.IncrementAccum(1)
+	seq := s.Sequence + 1
+	// include situation multiBlock=1
+	if seq == multiBlocks {
+		// Update validator accums and set state variables
+		nextValSet.IncrementAccum(1)
+		seq = 0
+	}
 
 	// update the params with the latest abciResponses
 	nextParams := s.ConsensusParams
@@ -93,6 +98,9 @@ func updateState(s State, blockID ttypes.BlockID, block *ttypes.TendermintBlock)
 		LastHeightConsensusParamsChanged: lastHeightParamsChanged,
 		LastResultsHash:                  nil,
 		AppHash:                          nil,
+		Sequence:                         seq,
+		LastSequence:                     s.Sequence,
+		LastCommitRound:                  block.Header.Round,
 	}, nil
 }
 
@@ -223,16 +231,16 @@ func validateBlock(stateDB *CSStateDB, s State, b *ttypes.TendermintBlock) error
 	// Validate block LastCommit.
 	if b.Header.Height == 1 {
 		if len(b.LastCommit.Precommits) != 0 {
-			return errors.New("Block at height 1 (first block) should have no LastCommit precommits")
+			return errors.New("Block at height 1 (first block) not have LastCommit precommits")
 		}
 	} else {
-		if len(b.LastCommit.Precommits) != s.LastValidators.Size() {
-			return fmt.Errorf("Invalid block commit size. Expected %v, got %v",
-				s.LastValidators.Size(), len(b.LastCommit.Precommits))
+		if (b.Header.LastSequence == 0 && b.LastCommit.VoteType != uint32(ttypes.VoteTypePrecommit)) ||
+			(b.Header.LastSequence > 0 && b.LastCommit.VoteType != uint32(ttypes.VoteTypePrevote)) {
+			return fmt.Errorf("Wrong LastCommit VoteType. LastSequence %v, VoteType %v",
+				b.Header.LastSequence, b.LastCommit.VoteType)
 		}
 		lastCommit := &ttypes.Commit{TendermintCommit: b.LastCommit}
-		err := s.LastValidators.VerifyCommit(
-			s.ChainID, s.LastBlockID, b.Header.Height-1, lastCommit)
+		err := s.LastValidators.VerifyCommit(s.ChainID, s.LastBlockID, b.Header.Height-1, lastCommit)
 		if err != nil {
 			return err
 		}

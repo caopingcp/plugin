@@ -616,14 +616,23 @@ func (voteSet *VoteSet) StringShort() string {
 // MakeCommit ...
 func (voteSet *VoteSet) MakeCommit() *tmtypes.TendermintCommit {
 	if voteSet.voteType != VoteTypePrecommit {
-		PanicSanity("Cannot MakeCommit() unless VoteSet.Type is VoteTypePrecommit")
+		PanicSanity("Cannot MakeCommit unless VoteSet.Type is VoteTypePrecommit")
 	}
+	return voteSet.MakeCommonCommit()
+}
+
+// MakeCommit ...
+func (voteSet *VoteSet) MakeCommonCommit() *tmtypes.TendermintCommit {
 	voteSet.mtx.Lock()
 	defer voteSet.mtx.Unlock()
 
+	if voteSet.voteType != VoteTypePrecommit && voteSet.voteType != VoteTypePrevote {
+		PanicSanity("Cannot MakeCommonCommit unless VoteSet.Type is VoteTypePrecommit or VoteTypePrevote")
+	}
+
 	// Make sure we have a 2/3 majority
 	if voteSet.maj23 == nil {
-		PanicSanity("Cannot MakeCommit() unless a blockhash has +2/3")
+		PanicSanity("Cannot MakeCommonCommit unless a blockhash has +2/3")
 	}
 
 	// For every validator, get the precommit
@@ -640,11 +649,46 @@ func (voteSet *VoteSet) MakeCommit() *tmtypes.TendermintCommit {
 		copy := voteSet.aggVote.Copy()
 		aggVote = copy.AggVote
 	}
-	return &tmtypes.TendermintCommit{
-		BlockID:    voteSet.maj23,
-		Precommits: votesCopy,
-		AggVote:    aggVote,
+
+	if voteSet.voteType == VoteTypePrecommit {
+		return &tmtypes.TendermintCommit{
+			BlockID:    voteSet.maj23,
+			Precommits: votesCopy,
+			AggVote:    aggVote,
+			VoteType:   uint32(VoteTypePrecommit),
+		}
+	} else {
+		return &tmtypes.TendermintCommit{
+			BlockID:  voteSet.maj23,
+			Prevotes: votesCopy,
+			AggVote:  aggVote,
+			VoteType: uint32(VoteTypePrevote),
+		}
 	}
+}
+
+func (voteSet *VoteSet) AddCommitVote(votes []*tmtypes.Vote, aggVote *tmtypes.AggVote) error {
+	for _, item := range votes {
+		if item == nil || len(item.Signature) == 0 {
+			continue
+		}
+		vote := &Vote{item}
+		added, err := voteSet.AddVote(vote)
+		if !added || err != nil {
+			return err
+		}
+	}
+	if aggVote != nil {
+		aggVote := &AggVote{aggVote}
+		added, err := voteSet.AddAggVote(aggVote)
+		if !added || err != nil {
+			return err
+		}
+	}
+	if !voteSet.HasTwoThirdsMajority() {
+		return errors.New("not have +2/3 votes")
+	}
+	return nil
 }
 
 //--------------------------------------------------------------------------------

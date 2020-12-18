@@ -57,7 +57,10 @@ type State struct {
 	LastResultsHash []byte
 
 	// The latest AppHash we've received from calling abci.Commit()
-	AppHash []byte
+	AppHash         []byte
+	Sequence        int64
+	LastSequence    int64
+	LastCommitRound int64
 }
 
 // Copy makes a copy of the State for mutating.
@@ -80,6 +83,9 @@ func (s State) Copy() State {
 		AppHash: s.AppHash,
 
 		LastResultsHash: s.LastResultsHash,
+		Sequence:        s.Sequence,
+		LastSequence:    s.LastSequence,
+		LastCommitRound: s.LastCommitRound,
 	}
 }
 
@@ -111,6 +117,34 @@ func (s State) GetValidators() (last *ttypes.ValidatorSet, current *ttypes.Valid
 	return s.LastValidators, s.Validators
 }
 
+// String returns a string
+func (s State) String() string {
+	return s.StringIndented("")
+}
+
+// StringIndented returns a string
+func (s State) StringIndented(indent string) string {
+	return fmt.Sprintf(`State{
+%s  ChainID:           %v
+%s  LastBlockHeight:   %v
+%s  LastBlockTotalTx:  %v
+%s  LastBlockID:       %X
+%s  Validators:        %v
+%s  Sequence:          %v
+%s  LastSequence:      %v
+%s  LastCommitRound:   %v
+%s}`,
+		indent, s.ChainID,
+		indent, s.LastBlockHeight,
+		indent, s.LastBlockTotalTx,
+		indent, s.LastBlockID.Hash,
+		indent, s.Validators.StringIndented(indent),
+		indent, s.Sequence,
+		indent, s.LastSequence,
+		indent, s.LastCommitRound,
+		indent)
+}
+
 //------------------------------------------------------------------------
 // Create a block from the latest state
 
@@ -128,6 +162,8 @@ func (s State) MakeBlock(height int64, round int64, pblock *types.Block, commit 
 	block.Header.ConsensusHash = s.ConsensusParams.Hash()
 	block.Header.LastResultsHash = s.LastResultsHash
 	block.Header.ProposerAddr = proposerAddr
+	block.Header.Sequence = s.Sequence
+	block.Header.LastSequence = s.LastSequence
 
 	return block
 }
@@ -193,12 +229,15 @@ func MakeGenesisState(genDoc *ttypes.GenesisDoc) (State, error) {
 
 		Validators:                  ttypes.NewValidatorSet(validators),
 		LastValidators:              ttypes.NewValidatorSet(nil),
-		LastHeightValidatorsChanged: 1,
+		LastHeightValidatorsChanged: 0,
 
 		ConsensusParams:                  *genDoc.ConsensusParams,
-		LastHeightConsensusParamsChanged: 1,
+		LastHeightConsensusParamsChanged: 0,
 
-		AppHash: genDoc.AppHash,
+		AppHash:         genDoc.AppHash,
+		Sequence:        0,
+		LastSequence:    0,
+		LastCommitRound: 0,
 	}, nil
 }
 
@@ -232,6 +271,9 @@ func LoadState(state *tmtypes.State) State {
 		LastHeightConsensusParamsChanged: state.LastHeightConsensusParamsChanged,
 		LastResultsHash:                  state.LastResultsHash,
 		AppHash:                          state.AppHash,
+		Sequence:                         state.Sequence,
+		LastSequence:                     state.LastSequence,
+		LastCommitRound:                  state.LastCommitRound,
 	}
 	if validators := state.GetValidators(); validators != nil {
 		if array := validators.GetValidators(); array != nil {
@@ -363,6 +405,9 @@ func SaveState(state State) *tmtypes.State {
 		LastHeightConsensusParamsChanged: state.LastHeightConsensusParamsChanged,
 		LastResultsHash:                  state.LastResultsHash,
 		AppHash:                          state.AppHash,
+		Sequence:                         state.Sequence,
+		LastSequence:                     state.LastSequence,
+		LastCommitRound:                  state.LastCommitRound,
 	}
 	if state.Validators != nil {
 		newState.Validators.Validators = saveValidators(newState.Validators.Validators, state.Validators.Validators)

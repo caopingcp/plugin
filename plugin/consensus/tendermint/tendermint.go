@@ -55,6 +55,7 @@ var (
 	signName                    = "ed25519"
 	useAggSig                   = false
 	gossipVotes                 atomic.Value
+	multiBlocks                 int64 = 1
 )
 
 func init() {
@@ -98,6 +99,7 @@ type subConfig struct {
 	PreExec                   bool     `json:"preExec"`
 	SignName                  string   `json:"signName"`
 	UseAggregateSignature     bool     `json:"useAggregateSignature"`
+	MultiBlocks               int64    `json:"multiBlocks"`
 }
 
 func applyConfig(sub []byte) {
@@ -153,6 +155,9 @@ func applyConfig(sub []byte) {
 	}
 	useAggSig = subcfg.UseAggregateSignature
 	gossipVotes.Store(true)
+	if subcfg.MultiBlocks > 0 {
+		multiBlocks = subcfg.MultiBlocks
+	}
 }
 
 // DefaultDBProvider returns a database using the DBBackend and DBDir
@@ -610,6 +615,12 @@ func (client *Client) LoadBlockCommit(height int64) *tmtypes.TendermintCommit {
 	blockInfo, _, err := client.QueryBlockInfoByHeight(height)
 	if err != nil {
 		tendermintlog.Error("LoadBlockCommit GetBlockInfo fail", "err", err)
+		return nil
+	}
+	seq, voteType := blockInfo.State.LastSequence, blockInfo.Block.LastCommit.VoteType
+	if (seq == 0 && voteType != uint32(ttypes.VoteTypePrecommit)) ||
+		(seq > 0 && voteType != uint32(ttypes.VoteTypePrevote)) {
+		tendermintlog.Error("LoadBlockCommit wrong VoteType", "seq", seq, "voteType", voteType)
 		return nil
 	}
 	return blockInfo.GetBlock().GetLastCommit()

@@ -8,12 +8,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"sort"
-	"strings"
-
 	"github.com/33cn/chain33/common/crypto"
 	"github.com/33cn/chain33/common/merkle"
 	"github.com/pkg/errors"
+	"sort"
 )
 
 // Validator ...
@@ -307,13 +305,11 @@ func (valSet *ValidatorSet) Iterate(fn func(index int, val *Validator) bool) {
 
 // VerifyCommit Verify that +2/3 of the set had signed the given signBytes
 func (valSet *ValidatorSet) VerifyCommit(chainID string, blockID BlockID, height int64, commit *Commit) error {
-	if valSet.Size() != len(commit.Precommits) {
-		return fmt.Errorf("Invalid commit -- wrong set size: %v vs %v", valSet.Size(), len(commit.Precommits))
+	if valSet.Size() != commit.Size() {
+		return fmt.Errorf("Invalid commit -- wrong set size: %v vs %v", valSet.Size(), commit.Size())
 	}
-	ttlog.Debug("VerifyCommit will get commit height", "height", commit.Height())
-	commitHeight := commit.Height()
-	if height != commitHeight {
-		return fmt.Errorf("VerifyCommit 1 Invalid commit -- wrong height: %v vs %v", height, commitHeight)
+	if height != commit.Height() {
+		return fmt.Errorf("Invalid commit -- wrong commit height: %v vs %v", height, commit.Height())
 	}
 
 	talliedVotingPower := int64(0)
@@ -324,9 +320,9 @@ func (valSet *ValidatorSet) VerifyCommit(chainID string, blockID BlockID, height
 		// Make sure the step matches
 		if (aggVote.Height != height) ||
 			(int(aggVote.Round) != round) ||
-			(aggVote.Type != uint32(VoteTypePrecommit)) {
+			(aggVote.Type != commit.VoteType) {
 			return errors.Wrapf(ErrVoteUnexpectedStep, "Got %d/%d/%d, expected %d/%d/%d",
-				height, round, VoteTypePrecommit,
+				height, round, commit.VoteType,
 				aggVote.Height, aggVote.Round, aggVote.Type)
 		}
 		// Check signature
@@ -341,7 +337,7 @@ func (valSet *ValidatorSet) VerifyCommit(chainID string, blockID BlockID, height
 				talliedVotingPower += val.VotingPower
 			}
 		}
-	} else {
+	} else if commit.VoteType == uint32(VoteTypePrecommit) {
 		for idx, item := range commit.Precommits {
 			// may be nil if validator skipped.
 			if item == nil || len(item.Signature) == 0 {
@@ -349,10 +345,10 @@ func (valSet *ValidatorSet) VerifyCommit(chainID string, blockID BlockID, height
 			}
 			precommit := &Vote{Vote: item}
 			if precommit.Height != height {
-				return fmt.Errorf("VerifyCommit 2 Invalid commit -- wrong height: %v vs %v", height, precommit.Height)
+				return fmt.Errorf("Invalid commit -- wrong precommit height: %v vs %v", height, precommit.Height)
 			}
 			if int(precommit.Round) != round {
-				return fmt.Errorf("Invalid commit -- wrong round: %v vs %v", round, precommit.Round)
+				return fmt.Errorf("Invalid commit -- wrong precommit round: %v vs %v", round, precommit.Round)
 			}
 			if precommit.Type != uint32(VoteTypePrecommit) {
 				return fmt.Errorf("Invalid commit -- not precommit @ index %v", idx)
@@ -363,19 +359,56 @@ func (valSet *ValidatorSet) VerifyCommit(chainID string, blockID BlockID, height
 			precommitSignBytes := SignBytes(chainID, precommit)
 			sig, err := ConsensusCrypto.SignatureFromBytes(precommit.Signature)
 			if err != nil {
-				return fmt.Errorf("VerifyCommit SignatureFromBytes [%X] failed:%v", precommit.Signature, err)
+				return fmt.Errorf("VerifyCommit precommit SignatureFromBytes [%X] fail:%v", precommit.Signature, err)
 			}
 			pubkey, err := ConsensusCrypto.PubKeyFromBytes(val.PubKey)
 			if err != nil {
-				return fmt.Errorf("VerifyCommit PubKeyFromBytes [%X] failed:%v", val.PubKey, err)
+				return fmt.Errorf("VerifyCommit precommit PubKeyFromBytes [%X] fail:%v", val.PubKey, err)
 			}
 			if !pubkey.VerifyBytes(precommitSignBytes, sig) {
-				return fmt.Errorf("Invalid commit -- invalid signature: %v", precommit)
+				return fmt.Errorf("Invalid commit -- invalid precommit signature: %v", precommit)
 			}
 			if !bytes.Equal(blockID.Hash, precommit.BlockID.Hash) {
 				continue // Not an error, but doesn't count
 			}
 			// Good precommit!
+			talliedVotingPower += val.VotingPower
+		}
+	} else {
+		for idx, item := range commit.Prevotes {
+			// may be nil if validator skipped.
+			if item == nil || len(item.Signature) == 0 {
+				continue
+			}
+			prevote := &Vote{Vote: item}
+			if prevote.Height != height {
+				return fmt.Errorf("Invalid commit -- wrong prevote height: %v vs %v", height, prevote.Height)
+			}
+			if int(prevote.Round) != round {
+				return fmt.Errorf("Invalid commit -- wrong prevote round: %v vs %v", round, prevote.Round)
+			}
+			if prevote.Type != uint32(VoteTypePrevote) {
+				return fmt.Errorf("Invalid commit -- not prevote @ index %v", idx)
+			}
+			_, val := valSet.GetByIndex(idx)
+
+			// Validate signature
+			prevoteSignBytes := SignBytes(chainID, prevote)
+			sig, err := ConsensusCrypto.SignatureFromBytes(prevote.Signature)
+			if err != nil {
+				return fmt.Errorf("VerifyCommit prevote SignatureFromBytes [%X] fail:%v", prevote.Signature, err)
+			}
+			pubkey, err := ConsensusCrypto.PubKeyFromBytes(val.PubKey)
+			if err != nil {
+				return fmt.Errorf("VerifyCommit prevote PubKeyFromBytes [%X] fail:%v", val.PubKey, err)
+			}
+			if !pubkey.VerifyBytes(prevoteSignBytes, sig) {
+				return fmt.Errorf("Invalid commit -- invalid prevote signature: %v", prevote)
+			}
+			if !bytes.Equal(blockID.Hash, prevote.BlockID.Hash) {
+				continue // Not an error, but doesn't count
+			}
+			// Good prevote!
 			talliedVotingPower += val.VotingPower
 		}
 	}
@@ -495,13 +528,11 @@ func (valSet *ValidatorSet) StringIndented(indent string) string {
 		return false
 	})
 	return Fmt(`ValidatorSet{
-%s  Proposer: %v
-%s  Validators:
-%s    %v
+%s  Proposer:    %v
+%s  Validators:  %v
 %s}`,
 		indent, valSet.GetProposer().String(),
-		indent,
-		indent, strings.Join(valStrings, "\n"+indent+"    "),
+		indent, valStrings,
 		indent)
 
 }

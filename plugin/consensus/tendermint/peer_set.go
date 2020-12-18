@@ -1002,16 +1002,18 @@ OUTER_LOOP:
 			prs := pc.state.GetRoundState()
 			if prs.CatchupCommitRound != -1 && 0 < prs.Height && prs.Height <= pc.myState.client.csStore.LoadStateHeight() {
 				commit := pc.myState.LoadCommit(prs.Height)
-				commitTmp := ttypes.Commit{TendermintCommit: commit}
-				msg := MsgInfo{TypeID: ttypes.VoteSetMaj23ID, Msg: &tmtypes.VoteSetMaj23Msg{
-					Height:  prs.Height,
-					Round:   int32(commitTmp.Round()),
-					Type:    int32(ttypes.VoteTypePrecommit),
-					BlockID: commit.BlockID,
-				}, PeerID: pc.id, PeerIP: pc.ip.String(),
+				if commit.VoteType == uint32(ttypes.VoteTypePrecommit) {
+					commitTmp := ttypes.Commit{TendermintCommit: commit}
+					msg := MsgInfo{TypeID: ttypes.VoteSetMaj23ID, Msg: &tmtypes.VoteSetMaj23Msg{
+						Height:  prs.Height,
+						Round:   int32(commitTmp.Round()),
+						Type:    int32(ttypes.VoteTypePrecommit),
+						BlockID: commit.BlockID,
+					}, PeerID: pc.id, PeerIP: pc.ip.String(),
+					}
+					pc.TrySend(msg)
+					time.Sleep(pc.myState.PeerQueryMaj23Sleep())
 				}
-				pc.TrySend(msg)
-				time.Sleep(pc.myState.PeerQueryMaj23Sleep())
 			}
 		}
 

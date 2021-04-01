@@ -39,7 +39,7 @@ func getConfigKey(key string, db dbm.KV) ([]byte, error) {
 	configKey := types.ConfigKey(key)
 	value, err := db.Get([]byte(configKey))
 	if err != nil {
-		clog.Error("getConfigKey not find", "configKey", configKey, "err", err)
+		clog.Info("getConfigKey not find", "configKey", configKey, "err", err)
 		return nil, err
 	}
 	return value, nil

@@ -5,7 +5,9 @@
 package commands
 
 import (
+	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -111,7 +113,27 @@ func getBlockInfo(cmd *cobra.Command, args []string) {
 
 	var res vt.QbftBlockInfo
 	ctx := jsonclient.NewRPCCtx(rpcLaddr, "Chain33.Query", params, &res)
-	ctx.Run()
+	ctx.SetResultCb(jsonOutput)
+	result, err := ctx.RunResult()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+	fmt.Println(result)
+}
+
+func jsonOutput(arg interface{}) (interface{}, error) {
+	res := arg.(*vt.QbftBlockInfo)
+	data, err := types.PBToJSON(res)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	err = json.Indent(&buf, data, "", "    ")
+	if err != nil {
+		return nil, err
+	}
+	return buf.String(), nil
 }
 
 // GetPerfStatCmd get block info

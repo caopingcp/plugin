@@ -6,13 +6,12 @@ package types
 import (
 	context "context"
 	fmt "fmt"
-	math "math"
-
 	types "github.com/33cn/chain33/types"
 	proto "github.com/golang/protobuf/proto"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	math "math"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -526,9 +525,7 @@ func init() {
 	proto.RegisterType((*ReqQbftPerfStat)(nil), "types.ReqQbftPerfStat")
 }
 
-func init() {
-	proto.RegisterFile("qbftNode.proto", fileDescriptor_df7368f483391686)
-}
+func init() { proto.RegisterFile("qbftNode.proto", fileDescriptor_df7368f483391686) }
 
 var fileDescriptor_df7368f483391686 = []byte{
 	// 490 bytes of a gzipped FileDescriptorProto
@@ -567,11 +564,11 @@ var fileDescriptor_df7368f483391686 = []byte{
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ context.Context
-var _ grpc.ClientConnInterface
+var _ grpc.ClientConn
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion6
+const _ = grpc.SupportPackageIsVersion4
 
 // QbftNodeClient is the client API for QbftNode service.
 //
@@ -582,10 +579,10 @@ type QbftNodeClient interface {
 }
 
 type qbftNodeClient struct {
-	cc grpc.ClientConnInterface
+	cc *grpc.ClientConn
 }
 
-func NewQbftNodeClient(cc grpc.ClientConnInterface) QbftNodeClient {
+func NewQbftNodeClient(cc *grpc.ClientConn) QbftNodeClient {
 	return &qbftNodeClient{cc}
 }
 

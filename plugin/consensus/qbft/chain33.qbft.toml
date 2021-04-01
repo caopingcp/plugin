@@ -36,7 +36,7 @@ enableTxQuickIndex=true
 
 [p2p]
 types=["dht"]
-enable=true
+enable=false
 msgCacheSize=10240
 driver="leveldb"
 dbPath="datadir/addrbook"
@@ -77,7 +77,7 @@ powLimitBits = "0x1f2fffff"
 genesis="14KEKbYtKKQm4wMthSK9J4La4nAiidGozt"
 genesisAmount=100000000
 genesisBlockTime=1514533394
-timeoutTxAvail=1000
+timeoutTxAvail=500
 timeoutPropose=1000
 timeoutProposeDelta=500
 timeoutPrevote=1000
@@ -87,17 +87,17 @@ timeoutPrecommitDelta=500
 timeoutCommit=500
 skipTimeoutCommit=false
 createEmptyBlocks=true
-createEmptyBlocksInterval=1
+createEmptyBlocksInterval=2
 validatorNodes=["127.0.0.1:46656", "127.0.0.2:46656"]
 fastSync=false
 # Propose阶段是否预执行区块
 preExec=false
 # 签名算法,支持"secp256k1","ed25519","sm2","bls",默认为"ed25519"
-signName="ed25519"
+signName="bls"
 # 是否使用聚合签名,签名算法需支持该特性,比如"bls"
-useAggregateSignature=false
+useAggregateSignature=true
 # 连续提议区块的个数，默认为1
-multiBlocks=3
+multiBlocks=2
 
 [store]
 name="kvmvcc"
@@ -105,7 +105,7 @@ driver="leveldb"
 dbPath="datadir/kvmvcc"
 dbCache=128
 
-[store.sub.kvmvcc]
+[store.sub.mavl]
 enableMavlPrefix=false
 enableMVCC=false
 
@@ -117,7 +117,7 @@ dbCache=16
 signType="secp256k1"
 
 [wallet.sub.ticket]
-minerdisable=false
+minerdisable=true
 minerwhitelist=["*"]
 
 [exec]
@@ -125,9 +125,6 @@ enableStat=false
 enableMVCC=false
 alias=["token1:token","token2:token","token3:token"]
 saveTokenTxList=false
-
-[exec.sub.qbftNode]
-enable=true
 
 [exec.sub.cert]
 # 是否启用证书验证和签名
@@ -141,6 +138,16 @@ signType="auth_ecdsa"
 superManager=[
     "14KEKbYtKKQm4wMthSK9J4La4nAiidGozt",
 ]
+
+[fork.system]
+ForkExecKey=0
+
+[fork.sub.manage]
+Enable=0
+ForkManageExec=0
+
+[fork.sub.qbftNode]
+Enable=0
 
 [metrics]
 #是否使能发送metrics数据的发送

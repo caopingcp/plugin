@@ -165,7 +165,7 @@ func (ps *PeerSet) hasIP(peerIP net.IP) bool {
 	return false
 }
 
-//
+// GetIP get IP by ID
 func (ps *PeerSet) GetIP(peerKey ID) net.IP {
 	ps.mtx.Lock()
 	ps.mtx.Unlock()

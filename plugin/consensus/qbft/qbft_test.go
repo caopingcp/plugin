@@ -1,203 +1,89 @@
-// Copyright Fuzamei Corp. 2018 All Rights Reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package qbft
 
 import (
-	"context"
 	"encoding/hex"
-	"errors"
-	"flag"
 	"fmt"
-	"math/rand"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/33cn/chain33/blockchain"
 	"github.com/33cn/chain33/common/address"
-	"github.com/33cn/chain33/common/limits"
-	"github.com/33cn/chain33/common/log"
-	"github.com/33cn/chain33/executor"
-	"github.com/33cn/chain33/mempool"
-	"github.com/33cn/chain33/queue"
-	"github.com/33cn/chain33/rpc"
-	"github.com/33cn/chain33/store"
 	mty "github.com/33cn/chain33/system/dapp/manage/types"
 	"github.com/33cn/chain33/types"
 	ty "github.com/33cn/plugin/plugin/consensus/qbft/types"
 	vty "github.com/33cn/plugin/plugin/dapp/qbftNode/types"
 	"github.com/stretchr/testify/assert"
-	"google.golang.org/grpc"
 
+	//加载系统内置store, 不要依赖plugin
 	_ "github.com/33cn/chain33/system"
+	_ "github.com/33cn/chain33/system/dapp/init"
+	_ "github.com/33cn/chain33/system/mempool/init"
+	_ "github.com/33cn/chain33/system/store/init"
+	"github.com/33cn/chain33/util"
+	"github.com/33cn/chain33/util/testnode"
 	_ "github.com/33cn/plugin/plugin/dapp/init"
 	_ "github.com/33cn/plugin/plugin/store/init"
 )
 
-var (
-	r         *rand.Rand
-	loopCount = 3
-	conn      *grpc.ClientConn
-	c         types.Chain33Client
-)
+// 执行： go test -cover
+func TestQbft(t *testing.T) {
+	mock33 := testnode.New("chain33.qbft.toml", nil)
+	cfg := mock33.GetClient().GetConfig()
+	defer mock33.Close()
+	mock33.Listen()
+	t.Log(mock33.GetGenesisAddress())
+	time.Sleep(time.Second)
 
-func init() {
-	err := limits.SetLimits()
-	if err != nil {
-		panic(err)
+	txs := util.GenNoneTxs(cfg, mock33.GetGenesisKey(), 10)
+	for i := 0; i < len(txs); i++ {
+		mock33.GetAPI().SendTx(txs[i])
 	}
-	r = rand.New(rand.NewSource(types.Now().UnixNano()))
-	log.SetLogLevel("info")
-}
-func TestQbftPerf(t *testing.T) {
-	QbftPerf(t)
-	fmt.Println("=======start clear test data!=======")
-	clearTestData()
-}
+	mock33.WaitTx(txs[9].Hash())
 
-func QbftPerf(t *testing.T) {
-	q, chain, s, mem, exec, cs := initEnvQbft()
-	defer chain.Close()
-	defer mem.Close()
-	defer exec.Close()
-	defer s.Close()
-	defer q.Close()
-	defer cs.Close()
-	err := createConn()
-	for err != nil {
-		err = createConn()
+	configTx := configManagerTx()
+	mock33.GetAPI().SendTx(configTx)
+	mock33.WaitTx(configTx.Hash())
+
+	addTx := addNodeTx()
+	mock33.GetAPI().SendTx(addTx)
+	mock33.WaitTx(addTx.Hash())
+
+	txs = util.GenNoneTxs(cfg, mock33.GetGenesisKey(), 10)
+	for i := 0; i < len(txs); i++ {
+		mock33.GetAPI().SendTx(txs[i])
+		mock33.WaitTx(txs[i].Hash())
 	}
-	time.Sleep(2 * time.Second)
-	ConfigManager()
-	for i := 0; i < loopCount; i++ {
-		SendTx(q.GetConfig().GetChainID())
-		time.Sleep(time.Second)
-	}
-	CheckState(t, cs.(*Client))
-	AddNode()
-	for i := 0; i < loopCount*3; i++ {
-		SendTx(q.GetConfig().GetChainID())
-		time.Sleep(time.Second)
-	}
-	time.Sleep(2 * time.Second)
+
+	time.Sleep(3 * time.Second)
+
+	var flag bool
+	err := mock33.GetJSONC().Call("qbftNode.IsSync", &types.ReqNil{}, &flag)
+	assert.Nil(t, err)
+	assert.Equal(t, true, flag)
+
+	var reply vty.QbftNodeInfoSet
+	err = mock33.GetJSONC().Call("qbftNode.GetNodeInfo", &types.ReqNil{}, &reply)
+	assert.Nil(t, err)
+	assert.Len(t, reply.Nodes, 2)
+
+	clearQbftData()
 }
 
-func initEnvQbft() (queue.Queue, *blockchain.BlockChain, queue.Module, queue.Module, *executor.Executor, queue.Module) {
-	flag.Parse()
-	chain33Cfg := types.NewChain33Config(types.ReadFile("chain33.qbft.toml"))
-	var q = queue.New("channel")
-	q.SetConfig(chain33Cfg)
-	cfg := chain33Cfg.GetModuleConfig()
-	sub := chain33Cfg.GetSubConfig()
-
-	chain := blockchain.New(chain33Cfg)
-	chain.SetQueueClient(q.Client())
-
-	exec := executor.New(chain33Cfg)
-	exec.SetQueueClient(q.Client())
-	chain33Cfg.SetMinFee(0)
-	s := store.New(chain33Cfg)
-	s.SetQueueClient(q.Client())
-
-	cs := New(cfg.Consensus, sub.Consensus["qbft"])
-	cs.SetQueueClient(q.Client())
-
-	mem := mempool.New(chain33Cfg)
-	mem.SetQueueClient(q.Client())
-
-	rpc.InitCfg(cfg.RPC)
-	gapi := rpc.NewGRpcServer(q.Client(), nil)
-	go gapi.Listen()
-	return q, chain, s, mem, exec, cs
-}
-
-func createConn() error {
-	var err error
-	url := "127.0.0.1:0"
-	fmt.Println("grpc url:", url)
-	conn, err = grpc.Dial(url, grpc.WithInsecure())
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return err
-	}
-	c = types.NewChain33Client(conn)
-	return nil
-}
-
-func prepareTxList(chainid int32) *types.Transaction {
-	tx := &types.Transaction{Execer: []byte("user.write"), Payload: randBytes(10), Fee: 1e6}
-	tx.To = address.ExecAddress("user.write")
-	tx.Nonce = r.Int63()
-	tx.ChainID = chainid
-	tx.Sign(types.SECP256K1, getprivkey("CC38546E9E659D15E6B4893F0AB32A06D103931A8230B0BDE71459D2B27D6944"))
-	return tx
-}
-
-const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789-=_+=/<>!@#$%^&"
-
-func randBytes(n int) []byte {
-	b := make([]byte, n)
-	rand.Seed(time.Now().UnixNano())
-	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
-	}
-	return b
-}
-
-func clearTestData() {
-	err := os.RemoveAll("datadir")
-	if err != nil {
-		fmt.Println("delete datadir have a err:", err.Error())
-	}
-	fmt.Println("test data clear successfully!")
-}
-
-func SendTx(chainid int32) {
-	tx := prepareTxList(chainid)
-
-	reply, err := c.SendTransaction(context.Background(), tx)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-	if !reply.IsOk {
-		fmt.Fprintln(os.Stderr, errors.New(string(reply.GetMsg())))
-		return
-	}
-}
-
-func AddNode() {
-	pubkey := "788657125A5A547B499F8B74239092EBB6466E8A205348D9EA645D510235A671"
+func addNodeTx() *types.Transaction {
+	pubkey := "93E69B00BCBC817BE7E3370BA0228908C6F5E5458F781998CDD2FDF7A983EB18BCF57F838901026DC65EDAC9A1F3D251"
 	pubkeybyte, err := hex.DecodeString(pubkey)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
+		return nil
 	}
 	nput := &vty.QbftNodeAction_Node{Node: &vty.QbftNode{PubKey: pubkeybyte, Power: int64(2)}}
 	action := &vty.QbftNodeAction{Value: nput, Ty: vty.QbftNodeActionUpdate}
 	tx := &types.Transaction{Execer: []byte("qbftNode"), Payload: types.Encode(action), Fee: fee}
 	tx.To = address.ExecAddress("qbftNode")
-	tx.Nonce = r.Int63()
-	version, _ := c.Version(context.Background(), nil)
-	if version != nil {
-		tx.ChainID = version.ChainID
-	}
 	tx.Sign(types.SECP256K1, getprivkey("CC38546E9E659D15E6B4893F0AB32A06D103931A8230B0BDE71459D2B27D6944"))
-
-	reply, err := c.SendTransaction(context.Background(), tx)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-	if !reply.IsOk {
-		fmt.Fprintln(os.Stderr, errors.New(string(reply.GetMsg())))
-		return
-	}
+	return tx
 }
 
-func ConfigManager() {
+func configManagerTx() *types.Transaction {
 	v := &types.ModifyConfig{Key: "qbft-manager", Op: "add", Value: "14KEKbYtKKQm4wMthSK9J4La4nAiidGozt", Addr: ""}
 	modify := &mty.ManageAction{
 		Ty:    mty.ManageActionModifyConfig,
@@ -205,23 +91,12 @@ func ConfigManager() {
 	}
 	tx := &types.Transaction{Execer: []byte("manage"), Payload: types.Encode(modify), Fee: fee}
 	tx.To = address.ExecAddress("manage")
-	tx.Nonce = r.Int63()
-	version, _ := c.Version(context.Background(), nil)
-	if version != nil {
-		tx.ChainID = version.ChainID
-
-	}
 	tx.Sign(types.SECP256K1, getprivkey("CC38546E9E659D15E6B4893F0AB32A06D103931A8230B0BDE71459D2B27D6944"))
+	return tx
+}
 
-	reply, err := c.SendTransaction(context.Background(), tx)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-	if !reply.IsOk {
-		fmt.Fprintln(os.Stderr, errors.New(string(reply.GetMsg())))
-		return
-	}
+func TestQbft2(t *testing.T) {
+
 }
 
 func CheckState(t *testing.T, client *Client) {
@@ -281,6 +156,14 @@ func CheckState(t *testing.T, client *Client) {
 
 	err = client.CommitBlock(client.GetCurrentBlock())
 	assert.Nil(t, err)
+}
+
+func clearQbftData() {
+	err := os.RemoveAll("datadir")
+	if err != nil {
+		fmt.Println("qbft data clear fail", err.Error())
+	}
+	fmt.Println("qbft data clear success")
 }
 
 func TestCompareHRS(t *testing.T) {

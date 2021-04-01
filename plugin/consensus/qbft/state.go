@@ -6,6 +6,7 @@ package qbft
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -124,7 +125,7 @@ func (s State) String() string {
 
 // StringIndented returns a string
 func (s State) StringIndented(indent string) string {
-	return fmt.Sprintf(`QbftState{
+	return fmt.Sprintf(`State{
 %s  ChainID:           %v
 %s  LastBlockHeight:   %v
 %s  LastBlockTotalTx:  %v
@@ -370,8 +371,8 @@ func saveValidators(dest []*tmtypes.QbftValidator, source []*ttypes.Validator) [
 			dest = append(dest, &tmtypes.QbftValidator{})
 		} else {
 			validator := &tmtypes.QbftValidator{
-				Address:     item.Address,
-				PubKey:      item.PubKey,
+				Address:     fmt.Sprintf("%X", item.Address),
+				PubKey:      fmt.Sprintf("%X", item.PubKey),
 				VotingPower: item.VotingPower,
 				Accum:       item.Accum,
 			}
@@ -383,8 +384,8 @@ func saveValidators(dest []*tmtypes.QbftValidator, source []*ttypes.Validator) [
 
 func saveProposer(dest *tmtypes.QbftValidator, source *ttypes.Validator) {
 	if source != nil {
-		dest.Address = source.Address
-		dest.PubKey = source.PubKey
+		dest.Address = fmt.Sprintf("%X", source.Address)
+		dest.PubKey = fmt.Sprintf("%X", source.PubKey)
 		dest.VotingPower = source.VotingPower
 		dest.Accum = source.Accum
 	}
@@ -440,21 +441,28 @@ func getprivkey(key string) crypto.PrivKey {
 // LoadValidators convert all external validators to internal validators
 func LoadValidators(des []*ttypes.Validator, source []*tmtypes.QbftValidator) {
 	for i, item := range source {
-		if item.GetAddress() == nil || len(item.GetAddress()) == 0 {
-			qbftlog.Warn("LoadValidators get address is nil or empty")
-			continue
-		} else if item.GetPubKey() == nil || len(item.GetPubKey()) == 0 {
-			qbftlog.Warn("LoadValidators get pubkey is nil or empty")
+		if item.GetAddress() == "" {
+			qbftlog.Warn("LoadValidators address is empty")
 			continue
 		}
+		if item.GetPubKey() == "" {
+			qbftlog.Warn("LoadValidators pubkey is empty")
+			continue
+		}
+		addr, err := hex.DecodeString(item.GetAddress())
+		if err != nil {
+			qbftlog.Warn("LoadValidators address is invalid")
+			continue
+		}
+		pubkey, err := hex.DecodeString(item.GetPubKey())
+		if err != nil {
+			qbftlog.Warn("LoadValidators pubkey is invalid")
+			continue
+		}
+
 		des[i] = &ttypes.Validator{}
-		des[i].Address = item.GetAddress()
-		pub := item.GetPubKey()
-		if pub == nil {
-			qbftlog.Error("LoadValidators get validator pubkey is nil", "item", i)
-		} else {
-			des[i].PubKey = pub
-		}
+		des[i].Address = addr
+		des[i].PubKey = pubkey
 		des[i].VotingPower = item.VotingPower
 		des[i].Accum = item.Accum
 	}
@@ -462,22 +470,28 @@ func LoadValidators(des []*ttypes.Validator, source []*tmtypes.QbftValidator) {
 
 // LoadProposer convert external proposer to internal proposer
 func LoadProposer(source *tmtypes.QbftValidator) (*ttypes.Validator, error) {
-	if source.GetAddress() == nil || len(source.GetAddress()) == 0 {
-		qbftlog.Warn("LoadProposer get address is nil or empty")
-		return nil, errors.New("LoadProposer get address is nil or empty")
-	} else if source.GetPubKey() == nil || len(source.GetPubKey()) == 0 {
-		qbftlog.Warn("LoadProposer get pubkey is nil or empty")
-		return nil, errors.New("LoadProposer get pubkey is nil or empty")
+	if source.GetAddress() == "" {
+		qbftlog.Warn("LoadProposer address is empty")
+		return nil, errors.New("LoadProposer address is empty")
+	}
+	if source.GetPubKey() == "" {
+		qbftlog.Warn("LoadProposer pubkey is empty")
+		return nil, errors.New("LoadProposer pubkey is empty")
+	}
+	addr, err := hex.DecodeString(source.GetAddress())
+	if err != nil {
+		qbftlog.Warn("LoadProposer address is invalid")
+		return nil, errors.New("LoadProposer address is invalid")
+	}
+	pubkey, err := hex.DecodeString(source.GetPubKey())
+	if err != nil {
+		qbftlog.Warn("LoadProposer pubkey is invalid")
+		return nil, errors.New("LoadProposer pubkey is invalid")
 	}
 
 	des := &ttypes.Validator{}
-	des.Address = source.GetAddress()
-	pub := source.GetPubKey()
-	if pub == nil {
-		qbftlog.Error("LoadProposer get pubkey is nil")
-	} else {
-		des.PubKey = pub
-	}
+	des.Address = addr
+	des.PubKey = pubkey
 	des.VotingPower = source.VotingPower
 	des.Accum = source.Accum
 	return des, nil

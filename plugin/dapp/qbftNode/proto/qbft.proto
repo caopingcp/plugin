@@ -65,10 +65,10 @@ message QbftConsensusParams {
 }
 
 message QbftValidator {
-    bytes address     = 1;
-    bytes pubKey      = 2;
-    int64 votingPower = 3;
-    int64 accum       = 4;
+    string address     = 1;
+    string pubKey      = 2;
+    int64  votingPower = 3;
+    int64  accum       = 4;
 }
 
 message QbftValidatorSet {

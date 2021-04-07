@@ -524,7 +524,7 @@ func (cs *ConsensusState) checkTxsAvailable() {
 				break
 			}
 			cs.txsAvailable <- height
-		case <-cs.client.StopC():
+		case <-cs.client.ctx.Done():
 			qbftlog.Info("checkTxsAvailable quit")
 			return
 		}
@@ -857,7 +857,7 @@ func (cs *ConsensusState) createBaseTx(block *tmtypes.QbftBlock) *types.Transact
 			return nil
 		}
 	}
-	tx := CreateBlockInfoTx(cs.client.pubKey, state, block)
+	tx := CreateBlockInfoTx(cs.client.privKey, state, block)
 	return tx
 }
 

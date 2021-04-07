@@ -19,7 +19,7 @@ func (val *QbftNode) Exec_Node(node *pty.QbftNode, tx *types.Transaction, index 
 	if !isValidManager(tx.From(), val.GetStateDB()) {
 		return nil, errors.New("not valid manager")
 	}
-	if len(node.GetPubKey()) == 0 {
+	if node.GetPubKey() == "" {
 		return nil, errors.New("validator pubkey is empty")
 	}
 	if node.GetPower() < 0 {

@@ -60,7 +60,7 @@ minTxFeeRate=100000
 
 [consensus]
 name="qbft"
-minerstart=false
+minerstart=true
 
 [mver.consensus]
 fundKeyAddr = "1BQXS6TxaYYG5mADaWij4AxhZZUTpw95a5"
@@ -78,7 +78,7 @@ genesis="14KEKbYtKKQm4wMthSK9J4La4nAiidGozt"
 genesisAmount=100000000
 genesisBlockTime=1514533394
 timeoutTxAvail=500
-timeoutPropose=1000
+timeoutPropose=2000
 timeoutProposeDelta=500
 timeoutPrevote=1000
 timeoutPrevoteDelta=500
@@ -105,7 +105,7 @@ driver="leveldb"
 dbPath="datadir/kvmvcc"
 dbCache=128
 
-[store.sub.mavl]
+[store.sub.kvmvcc]
 enableMavlPrefix=false
 enableMVCC=false
 

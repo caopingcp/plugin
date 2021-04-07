@@ -5,7 +5,6 @@
 package types
 
 import (
-	"encoding/hex"
 	"encoding/json"
 
 	"github.com/33cn/chain33/common/address"
@@ -90,12 +89,8 @@ func CreateNodeUpdateTx(cfg *types.Chain33Config, parm *NodeUpdateTx) (*types.Tr
 		return nil, types.ErrInvalidParam
 	}
 
-	pubkeybyte, err := hex.DecodeString(parm.PubKey)
-	if err != nil {
-		return nil, err
-	}
 	v := &QbftNode{
-		PubKey: pubkeybyte,
+		PubKey: parm.PubKey,
 		Power:  parm.Power,
 	}
 	update := &QbftNodeAction{
@@ -109,7 +104,7 @@ func CreateNodeUpdateTx(cfg *types.Chain33Config, parm *NodeUpdateTx) (*types.Tr
 		Payload: types.Encode(update),
 		To:      address.ExecAddress(execName),
 	}
-	tx, err = types.FormatTx(cfg, execName, tx)
+	tx, err := types.FormatTx(cfg, execName, tx)
 	if err != nil {
 		return nil, err
 	}

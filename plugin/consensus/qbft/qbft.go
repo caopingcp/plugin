@@ -6,6 +6,7 @@ package qbft
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math/rand"
 	"os"
@@ -70,13 +71,13 @@ type Client struct {
 	*drivers.BaseClient
 	genesisDoc    *ttypes.GenesisDoc // initial validator set
 	privValidator ttypes.PrivValidator
-	privKey       crypto.PrivKey // local node's p2p key
-	pubKey        string
+	privKey       crypto.PrivKey // node private key
 	csState       *ConsensusState
 	csStore       *ConsensusStore // save consensus state
 	node          *Node
 	txsAvailable  chan int64
-	stopC         chan struct{}
+	ctx           context.Context
+	cancel        context.CancelFunc
 }
 
 type subConfig struct {
@@ -169,6 +170,15 @@ func DefaultDBProvider(name string) dbm.DB {
 // New ...
 func New(cfg *types.Consensus, sub []byte) queue.Module {
 	qbftlog.Info("Start to create qbft client")
+	genesis = cfg.Genesis
+	genesisBlockTime = cfg.GenesisBlockTime
+	if !cfg.Minerstart {
+		qbftlog.Info("This node only sync block")
+		c := drivers.NewBaseClient(cfg)
+		client := &Client{BaseClient: c}
+		c.SetChild(client)
+		return client
+	}
 	applyConfig(sub)
 	//init rand
 	ttypes.Init()
@@ -209,18 +219,19 @@ func New(cfg *types.Consensus, sub []byte) queue.Module {
 
 	ttypes.InitMessageMap()
 
-	priv := privValidator.PrivKey
-	pubkey := privValidator.GetPubKey().KeyString()
+	//采用context来统一管理所有服务
+	ctx, stop := context.WithCancel(context.Background())
+
 	c := drivers.NewBaseClient(cfg)
 	client := &Client{
 		BaseClient:    c,
 		genesisDoc:    genDoc,
 		privValidator: privValidator,
-		privKey:       priv,
-		pubKey:        pubkey,
+		privKey:       privValidator.PrivKey,
 		csStore:       NewConsensusStore(),
 		txsAvailable:  make(chan int64, 1),
-		stopC:         make(chan struct{}, 1),
+		ctx:           ctx,
+		cancel:        stop,
 	}
 	c.SetChild(client)
 	return client
@@ -244,8 +255,9 @@ func (client *Client) GenesisState() *State {
 // Close TODO:may need optimize
 func (client *Client) Close() {
 	client.BaseClient.Close()
-	client.node.Stop()
-	client.stopC <- struct{}{}
+	if client.cancel != nil {
+		client.cancel()
+	}
 	qbftlog.Info("consensus qbft closed")
 }
 
@@ -257,6 +269,10 @@ func (client *Client) SetQueueClient(q queue.Client) {
 	})
 
 	go client.EventLoop()
+	if !client.IsMining() {
+		qbftlog.Info("enter sync mode")
+		return
+	}
 	go client.StartConsensus()
 }
 
@@ -269,11 +285,10 @@ func (client *Client) StartConsensus() {
 	beg := time.Now()
 OuterLoop:
 	for fastSync {
-		if client.IsClosed() {
+		select {
+		case <-client.ctx.Done():
 			qbftlog.Info("StartConsensus quit")
 			return
-		}
-		select {
 		case <-hint.C:
 			qbftlog.Info("Still catching up max height......", "Height", client.GetCurrentHeight(), "cost", time.Since(beg))
 		default:
@@ -434,32 +449,35 @@ func (client *Client) ProcEvent(msg *queue.Message) bool {
 	return true
 }
 
-// CreateBlock a routine monitor whether some transactions available and tell client by available channel
+// CreateBlock trigger consensus forward when tx available
 func (client *Client) CreateBlock() {
+	ticker := time.NewTicker(time.Duration(timeoutTxAvail) * time.Millisecond)
+	defer ticker.Stop()
+
 	for {
-		if client.IsClosed() {
+		select {
+		case <-client.ctx.Done():
 			qbftlog.Info("CreateBlock quit")
-			break
-		}
-		if !client.csState.IsRunning() {
-			qbftlog.Info("consensus not running")
-			time.Sleep(500 * time.Millisecond)
-			continue
-		}
+			return
+		case <-ticker.C:
+			if !client.csState.IsRunning() {
+				qbftlog.Info("consensus not running")
+				break
+			}
 
-		height, err := client.getLastHeight()
-		if err != nil {
-			continue
-		}
-		if !client.CheckTxsAvailable(height) {
-			time.Sleep(1000 * time.Millisecond)
-			continue
-		}
+			height, err := client.getLastHeight()
+			if err != nil {
+				qbftlog.Info("getLastHeight fail", "err", err)
+				break
+			}
+			if !client.CheckTxsAvailable(height) {
+				break
+			}
 
-		if height+1 == client.csState.GetRoundState().Height {
-			client.txsAvailable <- height + 1
+			if height+1 == client.csState.GetRoundState().Height {
+				client.txsAvailable <- height + 1
+			}
 		}
-		time.Sleep(time.Duration(timeoutTxAvail) * time.Millisecond)
 	}
 }
 
@@ -474,11 +492,6 @@ func (client *Client) getLastHeight() (int64, error) {
 // TxsAvailable check available channel
 func (client *Client) TxsAvailable() <-chan int64 {
 	return client.txsAvailable
-}
-
-// StopC stop client
-func (client *Client) StopC() <-chan struct{} {
-	return client.stopC
 }
 
 // CheckTxsAvailable check whether some new transactions arriving
@@ -560,11 +573,10 @@ func (client *Client) WaitBlock(height int64) bool {
 
 	beg := time.Now()
 	for {
-		if client.IsClosed() {
+		select {
+		case <-client.ctx.Done():
 			qbftlog.Info("WaitBlock quit")
 			return false
-		}
-		select {
 		case <-ticker.C:
 			qbftlog.Info("Still waiting block......", "height", height, "cost", time.Since(beg))
 		default:

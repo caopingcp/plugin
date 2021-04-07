@@ -195,15 +195,10 @@ func addNode(cmd *cobra.Command, args []string) {
 	pubkey, _ := cmd.Flags().GetString("pubkey")
 	power, _ := cmd.Flags().GetInt64("power")
 
-	pubkeybyte, err := hex.DecodeString(pubkey)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-	value := &vt.QbftNodeAction_Node{Node: &vt.QbftNode{PubKey: pubkeybyte, Power: power}}
+	value := &vt.QbftNodeAction_Node{Node: &vt.QbftNode{PubKey: pubkey, Power: power}}
 	action := &vt.QbftNodeAction{Value: value, Ty: vt.QbftNodeActionUpdate}
 	tx := &types.Transaction{Payload: types.Encode(action)}
-	tx, err = types.FormatTx(cfg, vt.QbftNodeX, tx)
+	tx, err := types.FormatTx(cfg, vt.QbftNodeX, tx)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return

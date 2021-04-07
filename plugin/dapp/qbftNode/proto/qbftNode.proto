@@ -5,8 +5,8 @@ import "common.proto";
 import "qbft.proto";
 
 message QbftNode {
-    bytes pubKey = 1;
-    int64 power  = 2;
+    string pubKey = 1;
+    int64  power  = 2;
 }
 
 message QbftNodes {

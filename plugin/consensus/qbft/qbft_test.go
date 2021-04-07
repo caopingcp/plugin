@@ -1,13 +1,14 @@
 package qbft
 
 import (
-	"encoding/hex"
 	"fmt"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/33cn/chain33/common"
 	"github.com/33cn/chain33/common/address"
+	"github.com/33cn/chain33/common/crypto"
 	mty "github.com/33cn/chain33/system/dapp/manage/types"
 	"github.com/33cn/chain33/types"
 	ty "github.com/33cn/plugin/plugin/consensus/qbft/types"
@@ -71,11 +72,7 @@ func TestQbft(t *testing.T) {
 
 func addNodeTx() *types.Transaction {
 	pubkey := "93E69B00BCBC817BE7E3370BA0228908C6F5E5458F781998CDD2FDF7A983EB18BCF57F838901026DC65EDAC9A1F3D251"
-	pubkeybyte, err := hex.DecodeString(pubkey)
-	if err != nil {
-		return nil
-	}
-	nput := &vty.QbftNodeAction_Node{Node: &vty.QbftNode{PubKey: pubkeybyte, Power: int64(2)}}
+	nput := &vty.QbftNodeAction_Node{Node: &vty.QbftNode{PubKey: pubkey, Power: int64(2)}}
 	action := &vty.QbftNodeAction{Value: nput, Ty: vty.QbftNodeActionUpdate}
 	tx := &types.Transaction{Execer: []byte("qbftNode"), Payload: types.Encode(action), Fee: fee}
 	tx.To = address.ExecAddress("qbftNode")
@@ -93,6 +90,22 @@ func configManagerTx() *types.Transaction {
 	tx.To = address.ExecAddress("manage")
 	tx.Sign(types.SECP256K1, getprivkey("CC38546E9E659D15E6B4893F0AB32A06D103931A8230B0BDE71459D2B27D6944"))
 	return tx
+}
+
+func getprivkey(key string) crypto.PrivKey {
+	cr, err := crypto.New(types.GetSignName("", types.SECP256K1))
+	if err != nil {
+		panic(err)
+	}
+	bkey, err := common.FromHex(key)
+	if err != nil {
+		panic(err)
+	}
+	priv, err := cr.PrivKeyFromBytes(bkey[:32])
+	if err != nil {
+		panic(err)
+	}
+	return priv
 }
 
 func TestQbft2(t *testing.T) {

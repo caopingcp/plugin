@@ -13,7 +13,6 @@ import (
 	"io/ioutil"
 	"sync"
 
-	"github.com/33cn/chain33/common"
 	"github.com/33cn/chain33/common/address"
 	"github.com/33cn/chain33/common/crypto"
 	"github.com/33cn/chain33/types"
@@ -422,22 +421,6 @@ func SaveState(state State) *tmtypes.QbftState {
 	return &newState
 }
 
-func getprivkey(key string) crypto.PrivKey {
-	cr, err := crypto.New(types.GetSignName("", types.SECP256K1))
-	if err != nil {
-		panic(err)
-	}
-	bkey, err := common.FromHex(key)
-	if err != nil {
-		panic(err)
-	}
-	priv, err := cr.PrivKeyFromBytes(bkey[:32])
-	if err != nil {
-		panic(err)
-	}
-	return priv
-}
-
 // LoadValidators convert all external validators to internal validators
 func LoadValidators(des []*ttypes.Validator, source []*tmtypes.QbftValidator) {
 	for i, item := range source {
@@ -498,8 +481,7 @@ func LoadProposer(source *tmtypes.QbftValidator) (*ttypes.Validator, error) {
 }
 
 // CreateBlockInfoTx make blockInfo to the first transaction of the block and execer is qbftNode
-func CreateBlockInfoTx(pubkey string, state *tmtypes.QbftState, block *tmtypes.QbftBlock) *types.Transaction {
-
+func CreateBlockInfoTx(priv crypto.PrivKey, state *tmtypes.QbftState, block *tmtypes.QbftBlock) *types.Transaction {
 	blockSave := *block
 	blockSave.Data = nil
 	blockInfo := &tmtypes.QbftBlockInfo{
@@ -513,7 +495,7 @@ func CreateBlockInfoTx(pubkey string, state *tmtypes.QbftState, block *tmtypes.Q
 	tx := &types.Transaction{Execer: []byte("qbftNode"), Payload: types.Encode(action), Fee: fee}
 	tx.To = address.ExecAddress("qbftNode")
 	tx.Nonce = random.Int63()
-	tx.Sign(types.SECP256K1, getprivkey(pubkey))
+	tx.Sign(int32(ttypes.SignMap[signName]), priv)
 
 	return tx
 }

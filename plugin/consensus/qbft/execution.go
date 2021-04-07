@@ -6,6 +6,7 @@ package qbft
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -117,7 +118,11 @@ func updateValidators(currentSet *ttypes.ValidatorSet, updates []*tmtypes.QbftNo
 	}
 
 	for _, v := range updates {
-		pubkey, err := ttypes.ConsensusCrypto.PubKeyFromBytes(v.PubKey) // NOTE: expects go-wire encoded pubkey
+		pubkeyBytes, err := hex.DecodeString(v.PubKey)
+		if err != nil {
+			return err
+		}
+		pubkey, err := ttypes.ConsensusCrypto.PubKeyFromBytes(pubkeyBytes)
 		if err != nil {
 			return err
 		}
@@ -159,7 +164,11 @@ func changeInVotingPowerMoreOrEqualToOneThird(currentSet *ttypes.ValidatorSet, u
 	acc := int64(0)
 
 	for _, v := range updates {
-		pubkey, err := ttypes.ConsensusCrypto.PubKeyFromBytes(v.PubKey) // NOTE: expects go-wire encoded pubkey
+		pubkeyBytes, err := hex.DecodeString(v.PubKey)
+		if err != nil {
+			return false, err
+		}
+		pubkey, err := ttypes.ConsensusCrypto.PubKeyFromBytes(pubkeyBytes)
 		if err != nil {
 			return false, err
 		}

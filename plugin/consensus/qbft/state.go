@@ -138,7 +138,7 @@ func (s State) StringIndented(indent string) string {
 		indent, s.ChainID,
 		indent, s.LastBlockHeight,
 		indent, s.LastBlockTotalTx,
-		indent, s.LastBlockID.Hash,
+		indent, s.LastBlockID,
 		indent, s.Validators.StringIndented(indent),
 		indent, s.Sequence,
 		indent, s.LastSequence,
@@ -157,7 +157,7 @@ func (s State) MakeBlock(height int64, round int64, pblock *types.Block, commit 
 	// fill header with state data
 	block.Header.ChainID = s.ChainID
 	block.Header.TotalTxs = s.LastBlockTotalTx + block.Header.NumTxs
-	block.Header.LastBlockID = &s.LastBlockID.QbftBlockID
+	block.Header.LastBlockID = s.LastBlockID.QbftBlockID
 	block.Header.ValidatorsHash = s.Validators.Hash()
 	block.Header.AppHash = s.AppHash
 	block.Header.ConsensusHash = s.ConsensusParams.Hash()
@@ -225,7 +225,7 @@ func MakeGenesisState(genDoc *ttypes.GenesisDoc) (State, error) {
 		ChainID: genDoc.ChainID,
 
 		LastBlockHeight: 0,
-		LastBlockID:     ttypes.BlockID{},
+		LastBlockID:     ttypes.BlockID{QbftBlockID: &tmtypes.QbftBlockID{}},
 		LastBlockTime:   genDoc.GenesisTime.UnixNano(),
 
 		Validators:                  ttypes.NewValidatorSet(validators),
@@ -263,7 +263,7 @@ func LoadState(state *tmtypes.QbftState) State {
 		ChainID:                          state.GetChainID(),
 		LastBlockHeight:                  state.GetLastBlockHeight(),
 		LastBlockTotalTx:                 state.GetLastBlockTotalTx(),
-		LastBlockID:                      ttypes.BlockID{QbftBlockID: *state.LastBlockID},
+		LastBlockID:                      ttypes.BlockID{QbftBlockID: state.LastBlockID},
 		LastBlockTime:                    state.LastBlockTime,
 		Validators:                       &ttypes.ValidatorSet{Validators: make([]*ttypes.Validator, 0), Proposer: &ttypes.Validator{}},
 		LastValidators:                   &ttypes.ValidatorSet{Validators: make([]*ttypes.Validator, 0), Proposer: &ttypes.Validator{}},
@@ -397,7 +397,7 @@ func SaveState(state State) *tmtypes.QbftState {
 		ChainID:                          state.ChainID,
 		LastBlockHeight:                  state.LastBlockHeight,
 		LastBlockTotalTx:                 state.LastBlockTotalTx,
-		LastBlockID:                      &state.LastBlockID.QbftBlockID,
+		LastBlockID:                      state.LastBlockID.QbftBlockID,
 		LastBlockTime:                    state.LastBlockTime,
 		Validators:                       &tmtypes.QbftValidatorSet{Validators: make([]*tmtypes.QbftValidator, 0), Proposer: &tmtypes.QbftValidator{}},
 		LastValidators:                   &tmtypes.QbftValidatorSet{Validators: make([]*tmtypes.QbftValidator, 0), Proposer: &tmtypes.QbftValidator{}},

@@ -20,27 +20,36 @@ import (
 
 // QbftBlockID struct
 type BlockID struct {
-	tmtypes.QbftBlockID
+	*tmtypes.QbftBlockID
 }
 
 // IsZero returns true if this is the QbftBlockID for a nil-block
 func (blockID BlockID) IsZero() bool {
+	if blockID.QbftBlockID == nil {
+		return true
+	}
 	return len(blockID.Hash) == 0
 }
 
 // Equals returns true if the QbftBlockID matches the given QbftBlockID
 func (blockID BlockID) Equals(other BlockID) bool {
-	return bytes.Equal(blockID.Hash, other.Hash)
+	return blockID.Key() == other.Key()
 }
 
 // Key returns a machine-readable string representation of the QbftBlockID
 func (blockID BlockID) Key() string {
+	if blockID.QbftBlockID == nil {
+		return "nil"
+	}
 	return string(blockID.Hash)
 }
 
 // String returns a human readable string representation of the QbftBlockID
 func (blockID BlockID) String() string {
-	return Fmt(`%v`, blockID.Hash)
+	if blockID.QbftBlockID == nil {
+		return "nil"
+	}
+	return Fmt("%X", blockID.Hash)
 }
 
 //QbftBlock struct
@@ -348,7 +357,7 @@ func (commit *Commit) GetAggVote() *AggVote {
 
 // ValidateBasic performs basic validation that doesn't involve state data.
 func (commit *Commit) ValidateBasic() error {
-	blockID := &BlockID{QbftBlockID: *commit.BlockID}
+	blockID := &BlockID{QbftBlockID: commit.BlockID}
 	if blockID.IsZero() {
 		return errors.New("Commit cannot be for nil block")
 	}

@@ -60,12 +60,12 @@ type VoteSet struct {
 	mtx           sync.Mutex
 	valSet        *ValidatorSet
 	votesBitArray *BitArray
-	votes         []*Vote                         // Primary votes to share
-	sum           int64                           // Sum of voting power for seen votes, discounting conflicts
-	maj23         *tmtypes.QbftBlockID            // First 2/3 majority seen
-	votesByBlock  map[string]*blockVotes          // string(blockHash|blockParts) -> blockVotes
-	peerMaj23s    map[string]*tmtypes.QbftBlockID // Maj23 for each peer
-	aggVote       *AggVote                        // aggregate vote
+	votes         []*Vote                // Primary votes to share
+	sum           int64                  // Sum of voting power for seen votes, discounting conflicts
+	maj23         *tmtypes.QbftBlockID   // First 2/3 majority seen
+	votesByBlock  map[string]*blockVotes // string(blockHash|blockParts) -> blockVotes
+	peerMaj23s    map[string]BlockID     // Maj23 for each peer
+	aggVote       *AggVote               // aggregate vote
 }
 
 // NewVoteSet Constructs a new VoteSet struct used to accumulate votes for given height/round.
@@ -84,7 +84,7 @@ func NewVoteSet(chainID string, height int64, round int, voteType byte, valSet *
 		sum:           0,
 		maj23:         nil,
 		votesByBlock:  make(map[string]*blockVotes, valSet.Size()),
-		peerMaj23s:    make(map[string]*tmtypes.QbftBlockID),
+		peerMaj23s:    make(map[string]BlockID),
 		aggVote:       nil,
 	}
 }
@@ -152,7 +152,7 @@ func (voteSet *VoteSet) addVote(vote *Vote) (added bool, err error) {
 	}
 	valIndex := int(vote.ValidatorIndex)
 	valAddr := vote.ValidatorAddress
-	blockKey := BlockID{QbftBlockID: *vote.BlockID}.Key()
+	blockKey := BlockID{QbftBlockID: vote.BlockID}.Key()
 
 	// Ensure that validator index was set
 	if valIndex < 0 {
@@ -456,7 +456,7 @@ func (voteSet *VoteSet) SetPeerMaj23(peerID string, blockID *tmtypes.QbftBlockID
 		}
 		return // TODO bad peer!
 	}
-	voteSet.peerMaj23s[peerID] = blockID
+	voteSet.peerMaj23s[peerID] = BlockID{blockID}
 
 	// Create .votesByBlock entry if needed.
 	votesByBlock, ok := voteSet.votesByBlock[blockKey]
@@ -595,7 +595,7 @@ func (voteSet *VoteSet) StringIndented(indent string) string {
 %s  %v
 %s  %v
 %s}`,
-		indent, voteSet.height, voteSet.round, voteSet.voteType, voteSet.maj23,
+		indent, voteSet.height, voteSet.round, voteSet.voteType, BlockID{voteSet.maj23}.String(),
 		indent, strings.Join(voteStrings, "\n"+indent+"  "),
 		indent, voteSet.votesBitArray,
 		indent, voteSet.peerMaj23s,
@@ -610,7 +610,7 @@ func (voteSet *VoteSet) StringShort() string {
 	voteSet.mtx.Lock()
 	defer voteSet.mtx.Unlock()
 	return Fmt(`VoteSet{H:%v R:%v T:%v +2/3:%v %v %v}`,
-		voteSet.height, voteSet.round, voteSet.voteType, voteSet.maj23, voteSet.votesBitArray, voteSet.peerMaj23s)
+		voteSet.height, voteSet.round, voteSet.voteType, BlockID{voteSet.maj23}.String(), voteSet.votesBitArray, voteSet.peerMaj23s)
 }
 
 // MakeCommit ...

@@ -1214,7 +1214,7 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 	qbftlog.Debug("finalizeCommit validators of statecopy", "validators", stateCopy.Validators)
 	// NOTE: the block.AppHash wont reflect these txs until the next block
 	var err error
-	stateCopy, err = cs.blockExec.ApplyBlock(stateCopy, ttypes.BlockID{QbftBlockID: tmtypes.QbftBlockID{Hash: block.Hash()}}, block)
+	stateCopy, err = cs.blockExec.ApplyBlock(stateCopy, ttypes.BlockID{QbftBlockID: &tmtypes.QbftBlockID{Hash: block.Hash()}}, block)
 	if err != nil {
 		panic(fmt.Sprintf("finalizeCommit ApplyBlock fail: %v", err))
 	}

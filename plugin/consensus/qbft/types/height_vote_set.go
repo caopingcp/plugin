@@ -185,7 +185,7 @@ func (hvs *HeightVoteSet) POLInfo() (polRound int, polBlockID BlockID) {
 		rvs := hvs.getVoteSet(r, VoteTypePrevote)
 		polBlockID, ok := rvs.TwoThirdsMajority()
 		if ok {
-			return r, BlockID{polBlockID}
+			return r, BlockID{&polBlockID}
 		}
 	}
 	return -1, BlockID{}

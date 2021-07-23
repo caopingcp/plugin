@@ -1887,8 +1887,8 @@ func (cs *ConsensusState) GetPrecommitsState(height int64, round int, blockID *t
 }
 
 // SetPeerMaj23 when reach maj 2/3
-func (cs *ConsensusState) SetPeerMaj23(height int64, round int, voteType byte, peerID ID, blockID *tmtypes.QbftBlockID) {
+func (cs *ConsensusState) SetPeerMaj23(height int64, round int, voteType byte, peerID string, blockID *tmtypes.QbftBlockID) {
 	if height == cs.Height {
-		cs.Votes.SetPeerMaj23(round, voteType, string(peerID), blockID)
+		cs.Votes.SetPeerMaj23(round, voteType, peerID, blockID)
 	}
 }

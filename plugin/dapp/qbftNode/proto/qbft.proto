@@ -195,3 +195,20 @@ message QbftAggVote {
     QbftBlockID  blockID          = 7;
     bytes        signature        = 8;
 }
+
+message QbftP2PSubMsg {
+    oneof value {
+        QbftNewRoundStepMsg newRoundStep = 1;
+        QbftProposal        proposal     = 2;
+        QbftProposalPOLMsg  proposalPOL  = 3;
+        QbftVote            vote         = 4;
+        QbftHasVoteMsg      hasVote      = 5;
+        QbftVoteSetMaj23Msg voteSetMaj23 = 6;
+        QbftVoteSetBitsMsg  voteSetBits  = 7;
+        QbftHeartbeat       heartbeat    = 8;
+        QbftBlock           block        = 9;
+        QbftValidBlockMsg   validBlock   = 10;
+        QbftAggVote         aggVote      = 11;
+    }
+    int32 Ty = 12;
+}

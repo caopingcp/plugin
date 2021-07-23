@@ -601,7 +601,7 @@ FOR_LOOP:
 				pc.state.ApplyHasVoteMessage(msg.Msg.(*tmtypes.QbftHasVoteMsg))
 			} else if typeID == ttypes.VoteSetMaj23ID {
 				tmp := msg.Msg.(*tmtypes.QbftVoteSetMaj23Msg)
-				pc.myState.SetPeerMaj23(tmp.Height, int(tmp.Round), byte(tmp.Type), pc.id, tmp.BlockID)
+				pc.myState.SetPeerMaj23(tmp.Height, int(tmp.Round), byte(tmp.Type), string(pc.id), tmp.BlockID)
 				var myVotes *ttypes.BitArray
 				switch byte(tmp.Type) {
 				case ttypes.VoteTypePrevote:

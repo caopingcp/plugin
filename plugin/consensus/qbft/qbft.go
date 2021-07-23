@@ -82,6 +82,7 @@ type Client struct {
 	csState       *ConsensusState
 	csStore       *ConsensusStore // save consensus state
 	node          *Node
+	p2pNode       *P2pNode
 	txsAvailable  chan int64
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -450,8 +451,22 @@ func (client *Client) CheckBlock(parent *types.Block, current *types.BlockDetail
 
 // ProcEvent reply not support action err
 func (client *Client) ProcEvent(msg *queue.Message) bool {
-	msg.ReplyErr("Client", types.ErrActionNotSupport)
-	return true
+	if msg.Ty == types.EventReceiveSubData {
+		if req, ok := msg.GetData().(*types.TopicData); ok {
+			var sub tmtypes.QbftP2PSubMsg
+			err := types.Decode(req.Data, &sub)
+			if err != nil {
+				qbftlog.Error("qbft ProcEvent decode", "err", err)
+				return true
+			}
+			qbftlog.Info("qbft ProcEvent", "from", req.GetFrom(), "topic", req.GetTopic(), "ty", sub.GetTy())
+		} else {
+			qbftlog.Error("qbft ProcEvent topicData", "ty", types.EventReceiveSubData)
+		}
+		return true
+	}
+
+	return false
 }
 
 // CreateBlock trigger consensus forward when tx available

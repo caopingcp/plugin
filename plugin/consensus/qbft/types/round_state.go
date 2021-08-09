@@ -5,9 +5,8 @@
 package types
 
 import (
-	"time"
-
 	"reflect"
+	"time"
 
 	tmtypes "github.com/33cn/plugin/plugin/dapp/qbftNode/types"
 )
@@ -18,6 +17,8 @@ type RoundStepType uint8 // These must be numeric, ordered.
 var (
 	// MsgMap define
 	MsgMap map[byte]reflect.Type
+	// P2PMsgMap define
+	P2PMsgMap map[byte]reflect.Type
 )
 
 // step and message id define
@@ -61,6 +62,19 @@ func InitMessageMap() {
 		ProposalBlockID:     reflect.TypeOf(tmtypes.QbftBlock{}),
 		ValidBlockID:        reflect.TypeOf(tmtypes.QbftValidBlockMsg{}),
 		AggVoteID:           reflect.TypeOf(tmtypes.QbftAggVote{}),
+	}
+	P2PMsgMap = map[byte]reflect.Type{
+		NewRoundStepID:      reflect.TypeOf(tmtypes.QbftP2PMsg_NewRoundStep{}),
+		ProposalID:          reflect.TypeOf(tmtypes.QbftP2PMsg_Proposal{}),
+		ProposalPOLID:       reflect.TypeOf(tmtypes.QbftP2PMsg_ProposalPOL{}),
+		VoteID:              reflect.TypeOf(tmtypes.QbftP2PMsg_Vote{}),
+		HasVoteID:           reflect.TypeOf(tmtypes.QbftP2PMsg_HasVote{}),
+		VoteSetMaj23ID:      reflect.TypeOf(tmtypes.QbftP2PMsg_VoteSetMaj23{}),
+		VoteSetBitsID:       reflect.TypeOf(tmtypes.QbftP2PMsg_VoteSetBits{}),
+		ProposalHeartbeatID: reflect.TypeOf(tmtypes.QbftP2PMsg_Heartbeat{}),
+		ProposalBlockID:     reflect.TypeOf(tmtypes.QbftP2PMsg_Block{}),
+		ValidBlockID:        reflect.TypeOf(tmtypes.QbftP2PMsg_ValidBlock{}),
+		AggVoteID:           reflect.TypeOf(tmtypes.QbftP2PMsg_AggVote{}),
 	}
 }
 

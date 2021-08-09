@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	qbftVersion = "0.1.0"
+	qbftVersion = "0.2.0"
 
 	// DefaultQbftPort 默认端口
 	DefaultQbftPort = 33001
@@ -372,6 +372,9 @@ OuterLoop:
 	client.node = node
 	node.Start()
 
+	client.p2pNode = NewP2pNode(csState, client.ctx)
+	client.p2pNode.Start()
+
 	go client.CreateBlock()
 }
 
@@ -453,13 +456,18 @@ func (client *Client) CheckBlock(parent *types.Block, current *types.BlockDetail
 func (client *Client) ProcEvent(msg *queue.Message) bool {
 	if msg.Ty == types.EventReceiveSubData {
 		if req, ok := msg.GetData().(*types.TopicData); ok {
-			var sub tmtypes.QbftP2PSubMsg
-			err := types.Decode(req.Data, &sub)
+			var pmsg *tmtypes.QbftP2PMsg
+			err := types.Decode(req.Data, pmsg)
 			if err != nil {
 				qbftlog.Error("qbft ProcEvent decode", "err", err)
 				return true
 			}
-			qbftlog.Info("qbft ProcEvent", "from", req.GetFrom(), "topic", req.GetTopic(), "ty", sub.GetTy())
+			qbftlog.Info("qbft ProcEvent", "from", req.GetFrom(), "topic", req.GetTopic(), "ty", pmsg.GetTy())
+			err = client.SendToP2pNode(pmsg)
+			if err != nil {
+				qbftlog.Error("qbft SendToP2pNode", "err", err)
+				return true
+			}
 		} else {
 			qbftlog.Error("qbft ProcEvent topicData", "ty", types.EventReceiveSubData)
 		}
@@ -467,6 +475,23 @@ func (client *Client) ProcEvent(msg *queue.Message) bool {
 	}
 
 	return false
+}
+
+// SendToP2pNode send msg to P2pNode
+func (client *Client) SendToP2pNode(msg *tmtypes.QbftP2PMsg) error {
+	if client.p2pNode == nil {
+		return fmt.Errorf("P2pNode is nil")
+	}
+	select {
+	case client.p2pNode.eventChannel <- msg:
+	case <-time.After(defaultSendTimeout):
+		if byte(msg.Ty) == ttypes.ProposalBlockID {
+			propBlock := msg.GetBlock()
+			propBlock.Data = nil
+		}
+		qbftlog.Error("SendToP2pNode timeout", "msg", msg)
+	}
+	return nil
 }
 
 // CreateBlock trigger consensus forward when tx available

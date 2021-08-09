@@ -167,7 +167,7 @@ func (ps *PeerSet) hasIP(peerIP net.IP) bool {
 // GetIP get IP by ID
 func (ps *PeerSet) GetIP(peerKey ID) net.IP {
 	ps.mtx.Lock()
-	ps.mtx.Unlock()
+	defer ps.mtx.Unlock()
 
 	if item, ok := ps.lookup[peerKey]; ok {
 		ip, err := item.peer.RemoteIP()
@@ -412,6 +412,10 @@ func (pc *peerConn) PickSendVote(votes ttypes.VoteSetReader) bool {
 		}
 	}
 	if vote, ok := pc.state.PickVoteToSend(votes); ok {
+		if vote == nil {
+			qbftlog.Warn("Pick nil vote", "aggVote", votes.GetAggVote(), "vote", votes)
+			return false
+		}
 		msg := MsgInfo{TypeID: ttypes.VoteID, Msg: vote.QbftVote, PeerID: pc.id, PeerIP: pc.ip.String()}
 		qbftlog.Debug("Sending vote message", "msg", msg)
 		if pc.Send(msg) {

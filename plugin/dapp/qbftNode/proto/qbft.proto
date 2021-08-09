@@ -196,7 +196,7 @@ message QbftAggVote {
     bytes        signature        = 8;
 }
 
-message QbftP2PSubMsg {
+message QbftP2PMsg {
     oneof value {
         QbftNewRoundStepMsg newRoundStep = 1;
         QbftProposal        proposal     = 2;
@@ -210,5 +210,6 @@ message QbftP2PSubMsg {
         QbftValidBlockMsg   validBlock   = 10;
         QbftAggVote         aggVote      = 11;
     }
-    int32 Ty = 12;
+    int32  ty     = 12;
+    string peerId = 13;
 }

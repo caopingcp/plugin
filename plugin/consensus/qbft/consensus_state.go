@@ -128,6 +128,13 @@ func (cs *ConsensusState) SetOurID(id ID) {
 	cs.ourID = id
 }
 
+// GetOurID method
+func (cs *ConsensusState) GetOurID() ID {
+	cs.mtx.Lock()
+	defer cs.mtx.Unlock()
+	return cs.ourID
+}
+
 // SetBroadcastChannel method
 func (cs *ConsensusState) SetBroadcastChannel(broadcastChannel chan<- MsgInfo) {
 	cs.broadcastChannel = broadcastChannel
@@ -469,9 +476,9 @@ func (cs *ConsensusState) handleMsg(mi MsgInfo) {
 		// the peer is sending us CatchupCommit precommits.
 		// We could make note of this and help filter in broadcastHasVoteMessage().
 	case *tmtypes.QbftAggVote:
-		err = cs.tryAddAggVote(msg, peerID)
+		err = cs.tryAddAggVote(msg, peerID, peerIP)
 	default:
-		qbftlog.Error("Unknown msg type", msg.String(), "peerid", peerID, "peerip", peerIP)
+		qbftlog.Error("Unknown msg type", "msg", msg.String(), "peerid", peerID, "peerip", peerIP)
 	}
 	if err != nil {
 		//qbftlog.Error("Error with msg", "type", reflect.TypeOf(msg), "peerid", peerID, "peerip", peerIP, "err", err, "msg", msg)
@@ -626,27 +633,16 @@ func (cs *ConsensusState) enterNewRound(height int64, round int) {
 }
 
 func (cs *ConsensusState) proposalHeartbeat(height int64, round int) {
-	counter := 0
-	addr := cs.privValidator.GetAddress()
-	valIndex, _ := cs.Validators.GetByAddress(addr)
-	chainID := cs.state.ChainID
+	counter := int32(0)
 	for {
 		rs := cs.GetRoundState()
 		// if we've already moved on, no need to send more heartbeats
 		if rs.Step > ttypes.RoundStepNewRound || rs.Round > round || rs.Height > height {
 			return
 		}
-		heartbeat := &tmtypes.QbftHeartbeat{
-			Height:           rs.Height,
-			Round:            int32(rs.Round),
-			Sequence:         int32(counter),
-			ValidatorAddress: addr,
-			ValidatorIndex:   int32(valIndex),
-		}
-		heartbeatMsg := &ttypes.Heartbeat{QbftHeartbeat: heartbeat}
-		err := cs.GetPrivValidator().SignHeartbeat(chainID, heartbeatMsg)
+		heartbeat, err := cs.HeartbeatMessage(counter)
 		if err != nil {
-			qbftlog.Error("SignHeartbeat failed", "err", err)
+			qbftlog.Error("get HeartbeatMessage fail", "err", err)
 			continue
 		}
 		cs.broadcastChannel <- MsgInfo{TypeID: ttypes.ProposalHeartbeatID, Msg: heartbeat, PeerID: "", PeerIP: ""}
@@ -654,6 +650,26 @@ func (cs *ConsensusState) proposalHeartbeat(height int64, round int) {
 		counter++
 		time.Sleep(proposalHeartbeatIntervalSeconds * time.Second)
 	}
+}
+
+func (cs *ConsensusState) HeartbeatMessage(seq int32) (*tmtypes.QbftHeartbeat, error) {
+	rs := cs.GetRoundState()
+	addr := cs.privValidator.GetAddress()
+	valIndex, _ := cs.Validators.GetByAddress(addr)
+	chainID := cs.state.ChainID
+	heartbeat := &tmtypes.QbftHeartbeat{
+		Height:           rs.Height,
+		Round:            int32(rs.Round),
+		Sequence:         seq,
+		ValidatorAddress: addr,
+		ValidatorIndex:   int32(valIndex),
+	}
+	heartbeatMsg := &ttypes.Heartbeat{QbftHeartbeat: heartbeat}
+	err := cs.GetPrivValidator().SignHeartbeat(chainID, heartbeatMsg)
+	if err != nil {
+		return nil, err
+	}
+	return heartbeatMsg.QbftHeartbeat, nil
 }
 
 // Enter (CreateEmptyBlocks): from enterNewRound(height,round)
@@ -722,7 +738,10 @@ func (cs *ConsensusState) getProposerID() ID {
 	if err != nil {
 		qbftlog.Error("getProposerID fail", "err", err)
 	}
-	return GenIDByPubKey(pubkey)
+	if UseExclusiveP2P() {
+		return GenIDByPubKey(pubkey)
+	}
+	return ID(pubkey.KeyString())
 }
 
 func (cs *ConsensusState) defaultDecideProposal(height int64, round int) {
@@ -1422,7 +1441,7 @@ func (cs *ConsensusState) addProposalBlock(proposalBlock *tmtypes.QbftBlock) (er
 }
 
 // Attempt to add aggregate vote.
-func (cs *ConsensusState) tryAddAggVote(aggVoteRaw *tmtypes.QbftAggVote, peerID string) error {
+func (cs *ConsensusState) tryAddAggVote(aggVoteRaw *tmtypes.QbftAggVote, peerID string, peerIP string) error {
 	aggVote := &ttypes.AggVote{QbftAggVote: aggVoteRaw}
 	if aggVote.Height != cs.Height {
 		qbftlog.Debug("QbftAggVote ignored and not added", "voteHeight", aggVote.Height, "csHeight", cs.Height, "peerID", peerID)
@@ -1441,7 +1460,7 @@ func (cs *ConsensusState) tryAddAggVote(aggVoteRaw *tmtypes.QbftAggVote, peerID 
 	switch aggVote.Type {
 	case uint32(ttypes.VoteTypePrevote):
 		prevotes := cs.Votes.Prevotes(int(aggVote.Round))
-		qbftlog.Info("Added aggregate prevote", "aggVote", aggVote, "prevotes", prevotes.StringShort())
+		qbftlog.Info("Added aggregate prevote", "aggVote", aggVote, "prevotes", prevotes.StringShort(), "peerID", peerID, "peerIP", peerIP)
 
 		// If +2/3 prevotes for a block or nil for *any* round:
 		if blockID, ok := prevotes.TwoThirdsMajority(); ok {
@@ -1519,7 +1538,7 @@ func (cs *ConsensusState) tryAddAggVote(aggVoteRaw *tmtypes.QbftAggVote, peerID 
 
 	case uint32(ttypes.VoteTypePrecommit):
 		precommits := cs.Votes.Precommits(int(aggVote.Round))
-		qbftlog.Info("Added aggregate precommit", "aggVote", aggVote, "precommits", precommits.StringShort())
+		qbftlog.Info("Added aggregate precommit", "aggVote", aggVote, "precommits", precommits.StringShort(), "peerID", peerID, "peerIP", peerIP)
 
 		blockID, ok := precommits.TwoThirdsMajority()
 		if ok {
@@ -1576,7 +1595,7 @@ func (cs *ConsensusState) tryAddVote(voteRaw *tmtypes.QbftVote, peerID string, p
 func (cs *ConsensusState) addVote(vote *ttypes.Vote, peerID string, peerIP string) (added bool, err error) {
 	qbftlog.Debug(fmt.Sprintf("Consensus receive vote. Current: %v/%v/%v", cs.Height, cs.Round, cs.Step),
 		"vote", fmt.Sprintf("{%v:%X %v/%02d/%v}", vote.ValidatorIndex, ttypes.Fingerprint(vote.ValidatorAddress),
-			vote.Height, vote.Round, vote.Type), "peerip", peerIP)
+			vote.Height, vote.Round, vote.Type), "peerID", peerID, "peerIP", peerIP)
 
 	// A precommit for the previous height
 	// These come in while we wait timeoutCommit
@@ -1590,7 +1609,7 @@ func (cs *ConsensusState) addVote(vote *ttypes.Vote, peerID string, peerIP strin
 		if !added {
 			return added, err
 		}
-		qbftlog.Info(fmt.Sprintf("Added to lastPrecommits: %v", cs.LastCommit.StringShort()))
+		qbftlog.Info(fmt.Sprintf("Added to lastPrecommits: %v", cs.LastCommit.StringShort()), "peerID", peerID, "peerIP", peerIP)
 
 		hasVoteMsg := &tmtypes.QbftHasVoteMsg{
 			Height: vote.Height,
@@ -1639,7 +1658,7 @@ func (cs *ConsensusState) addVote(vote *ttypes.Vote, peerID string, peerIP strin
 	switch vote.Type {
 	case uint32(ttypes.VoteTypePrevote):
 		prevotes := cs.Votes.Prevotes(int(vote.Round))
-		qbftlog.Info("Added to prevote", "vote", vote, "prevotes", prevotes.StringShort())
+		qbftlog.Info("Added to prevote", "vote", vote, "prevotes", prevotes.StringShort(), "peerID", peerID, "peerIP", peerIP)
 
 		// If +2/3 prevotes for a block or nil for *any* round:
 		if blockID, ok := prevotes.TwoThirdsMajority(); ok {
@@ -1727,7 +1746,7 @@ func (cs *ConsensusState) addVote(vote *ttypes.Vote, peerID string, peerIP strin
 
 	case uint32(ttypes.VoteTypePrecommit):
 		precommits := cs.Votes.Precommits(int(vote.Round))
-		qbftlog.Info("Added to precommit", "vote", vote, "precommits", precommits.StringShort())
+		qbftlog.Info("Added to precommit", "vote", vote, "precommits", precommits.StringShort(), "peerID", peerID, "peerIP", peerIP)
 
 		blockID, ok := precommits.TwoThirdsMajority()
 		if ok {

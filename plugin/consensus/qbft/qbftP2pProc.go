@@ -7,6 +7,7 @@ package qbft
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"sync"
@@ -27,8 +28,9 @@ const (
 	qbftAggVoteTopic = "QBFT-AGGVOTE-TOPIC"
 	qbftMsgTopic     = "QBFT-MSG-TOPIC"
 
-	maxRecvQueueSize = 1024
-	maxPeersNum      = 1024
+	maxMsgQueueSize = 1024
+	maxPeersNum     = 1024
+	maxAliveCount   = 10
 )
 
 // P2PNode struct
@@ -36,28 +38,37 @@ type P2pNode struct {
 	ID ID
 	IP string
 
-	state            *ConsensusState
-	peerSet          *lru.Cache
+	state    *ConsensusState
+	peerSet  *lru.Cache
+	valIdSet *lru.Cache
+
 	eventChannel     chan *tmtypes.QbftP2PMsg
 	broadcastChannel chan MsgInfo
 	unicastChannel   chan MsgInfo
-	ctx              context.Context
+
+	cancel context.CancelFunc
+	ctx    context.Context
 }
 
 // NewP2pNode method
-func NewP2pNode(state *ConsensusState, ctx context.Context) *P2pNode {
+func NewP2pNode(state *ConsensusState) *P2pNode {
 	peerSet, err := lru.New(maxPeersNum)
+	if err != nil {
+		panic(err)
+	}
+	valIdSet, err := lru.New(maxPeersNum)
 	if err != nil {
 		panic(err)
 	}
 	node := &P2pNode{
 		state:            state,
 		peerSet:          peerSet,
-		eventChannel:     make(chan *tmtypes.QbftP2PMsg, maxRecvQueueSize),
-		broadcastChannel: make(chan MsgInfo, maxRecvQueueSize),
-		unicastChannel:   make(chan MsgInfo, maxRecvQueueSize),
-		ctx:              ctx,
+		valIdSet:         valIdSet,
+		eventChannel:     make(chan *tmtypes.QbftP2PMsg, maxMsgQueueSize),
+		broadcastChannel: make(chan MsgInfo, maxMsgQueueSize),
+		unicastChannel:   make(chan MsgInfo, maxMsgQueueSize),
 	}
+
 	state.SetBroadcastChannel(node.broadcastChannel)
 	state.SetUnicastChannel(node.unicastChannel)
 	return node
@@ -65,21 +76,114 @@ func NewP2pNode(state *ConsensusState, ctx context.Context) *P2pNode {
 
 // Start node
 func (node *P2pNode) Start() {
+	node.ctx, node.cancel = context.WithCancel(context.Background())
+	node.initSelfInfo()
+	node.updatePeerSet()
+
+	go node.StartConsensusRoutine()
+	go node.recvMsgRoutine()
+	go node.sendMsgRoutine()
+	go node.managePeersRoutine()
+}
+
+// Stop node
+func (node *P2pNode) Stop() {
+	// Stop peers
+	for _, id := range node.peerSet.Keys() {
+		peer, _ := node.getPeer(id)
+		peer.Stop()
+	}
+	node.peerSet.Purge()
+	if node.cancel != nil {
+		node.cancel()
+	}
+	//stop consensus
+	node.state.Stop()
+}
+
+func (node *P2pNode) initSelfInfo() {
+	hint := time.NewTicker(10 * time.Second)
+	defer hint.Stop()
+
+	beg := time.Now()
 	for {
 		select {
 		case <-node.ctx.Done():
-			qbftlog.Info("P2pNode stop")
+			qbftlog.Info("P2pNode initSelfInfo quit")
+			return
+		case <-hint.C:
+			qbftlog.Info("Still waiting P2P module up......", "cost", time.Since(beg))
+		default:
+			info, err := node.getSelfInfo()
+			if err == nil {
+				node.ID, node.IP = ID(info.Name), info.Addr
+				node.state.SetOurID(node.ID)
+				valId := node.state.privValidator.GetPubKey().KeyString()
+				node.valIdSet.Add(valId, node.ID)
+				qbftlog.Info("init self info", "id", node.ID, "ip", node.IP, "valId", valId)
+				return
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}
+}
+
+// StartConsensusRoutine if peers reached the threshold start consensus routine
+func (node *P2pNode) StartConsensusRoutine() {
+	for {
+		select {
+		case <-node.ctx.Done():
+			qbftlog.Info("P2pNode StartConsensusRoutine quit")
+			return
+		default:
+			//TODO:the peer count need be optimized
+			if node.peerSet.Len() >= 0 {
+				node.state.Start()
+				return
+			}
+			time.Sleep(1 * time.Second)
+		}
+
+	}
+}
+
+func (node *P2pNode) recvMsgRoutine() {
+	for {
+		select {
+		case <-node.ctx.Done():
+			qbftlog.Info("P2pNode recvMsgRoutine quit")
 			return
 		case msg := <-node.eventChannel:
 			node.procMsg(msg)
+		}
+	}
+}
+
+func (node *P2pNode) sendMsgRoutine() {
+	for {
+		select {
+		case <-node.ctx.Done():
+			qbftlog.Info("P2pNode sendMsgRoutine quit")
+			return
 		case msg := <-node.broadcastChannel:
 			node.broadcast(msg)
 		case msg := <-node.unicastChannel:
-			peer, err := node.getPeer(msg.PeerID)
+			id, ok := node.valIdSet.Get(string(msg.PeerID))
+			if !ok {
+				qbftlog.Error(fmt.Sprintf("unicastChannel not exist valId %v", msg.PeerID))
+				break
+			}
+			if id.(ID) == node.ID {
+				break
+			}
+			peer, err := node.getPeer(id.(ID))
 			if err != nil {
 				qbftlog.Error("unicastChannel getPeer", "err", err)
 				break
 			}
+			//change msg PeerID and PeerIP
+			msg.PeerID = peer.ID()
+			msg.PeerIP = peer.ip
 			success := peer.Send(msg)
 			if !success {
 				qbftlog.Error("send failure in unicastChannel", "peerID", peer.ID())
@@ -88,16 +192,127 @@ func (node *P2pNode) Start() {
 	}
 }
 
+func (node *P2pNode) managePeersRoutine() {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-node.ctx.Done():
+			qbftlog.Info("P2pNode managePeersRoutine quit")
+			return
+		case <-ticker.C:
+			node.updatePeerSet()
+		}
+	}
+}
+
+func (node *P2pNode) getSelfInfo() (*types.Peer, error) {
+	list, err := node.state.client.SendFetchPeerList()
+	if err != nil {
+		return nil, err
+	}
+	if len(list.Peers) == 0 {
+		return nil, fmt.Errorf("empty peer list")
+	}
+	info := list.Peers[len(list.Peers)-1]
+	if !info.Self {
+		return nil, fmt.Errorf("not self info")
+	}
+	return info, nil
+}
+
+func (node *P2pNode) updatePeerSet() {
+	list, err := node.state.client.SendFetchPeerList()
+	if err != nil {
+		qbftlog.Error("updatePeerSet SendFetchPeerList fail", "err", err)
+	}
+	for _, peer := range list.GetPeers() {
+		if !peer.Self {
+			pp, err1 := node.getPeer(ID(peer.Name))
+			if err1 == nil {
+				pp.IncAliveCount()
+			} else {
+				newPeer := NewP2pPeer(ID(peer.Name), peer.Addr, node.state, node.valIdSet)
+				err2 := node.addPeer(newPeer)
+				if err2 != nil {
+					qbftlog.Error("updatePeerSet addPeer fail", "err", err2)
+				}
+			}
+		}
+	}
+	for _, id := range node.peerSet.Keys() {
+		if !isContain(list.GetPeers(), string(id.(ID))) {
+			peer, err3 := node.getPeer(id)
+			if err3 != nil {
+				qbftlog.Error("updatePeerSet getPeer fail", "err", err3)
+				continue
+			}
+			peer.DecAliveCount()
+			if peer.GetAliveCount() == 0 {
+				err4 := node.delPeer(peer)
+				if err4 != nil {
+					qbftlog.Error("updatePeerSet delPeer fail", "err", err4)
+				}
+			}
+		}
+	}
+	for _, vid := range node.valIdSet.Keys() {
+		pid, _ := node.valIdSet.Get(vid)
+		if pid.(ID) == node.ID {
+			continue
+		}
+		pub, _ := hex.DecodeString(vid.(string))
+		pubkey, err := ttypes.ConsensusCrypto.PubKeyFromBytes(pub)
+		if err != nil {
+			qbftlog.Error("updatePeerSet PubKeyFromBytes fail", "err", err)
+			node.valIdSet.Remove(vid)
+			qbftlog.Info("delete wrong valId", "valId", vid, "pid", pid)
+		}
+		addr := ttypes.GenAddressByPubKey(pubkey)
+		if !node.state.Validators.HasAddress(addr) {
+			node.valIdSet.Remove(vid)
+			qbftlog.Info("delete valId not in validator set", "valId", vid, "pid", pid)
+		}
+	}
+}
+
+func isContain(peers []*types.Peer, id string) bool {
+	for _, peer := range peers {
+		if peer.Name == id {
+			return true
+		}
+	}
+	return false
+}
+
 func (node *P2pNode) addPeer(peer *p2pPeer) error {
 	err := peer.Start()
 	if err != nil {
 		return err
 	}
+
+	stateMsg := MsgInfo{TypeID: ttypes.NewRoundStepID, Msg: node.state.RoundStateMessage(), PeerID: peer.ID(), PeerIP: peer.ip}
+	peer.Send(stateMsg)
+	heartbeat, err := node.state.HeartbeatMessage(0)
+	if err != nil {
+		return err
+	}
+	heartbeatMsg := MsgInfo{TypeID: ttypes.ProposalHeartbeatID, Msg: heartbeat, PeerID: peer.ID(), PeerIP: peer.ip}
+	peer.Send(heartbeatMsg)
+	qbftlog.Info("Send state msg", "stateMsg", stateMsg)
 	node.peerSet.Add(peer.ID(), peer)
 	qbftlog.Info("add peer", "id", peer.ID(), "ip", peer.ip)
-	stateMsg := MsgInfo{TypeID: ttypes.NewRoundStepID, Msg: node.state.RoundStateMessage(), PeerID: peer.ID(), PeerIP: peer.ip.String()}
-	peer.Send(stateMsg)
-	qbftlog.Info("Send state msg", "msg", stateMsg, "ourID", node.ID, "ourIP", node.IP)
+	return nil
+}
+
+func (node *P2pNode) delPeer(peer *p2pPeer) error {
+	err := peer.Stop()
+	if err != nil {
+		return err
+	}
+	node.peerSet.Remove(peer.ID())
+	qbftlog.Info("delete peer", "id", peer.ID(), "ip", peer.ip)
 	return nil
 }
 
@@ -115,7 +330,7 @@ func (node *P2pNode) broadcast(msg MsgInfo) chan bool {
 		go func(peer *p2pPeer) {
 			defer wg.Done()
 			msg.PeerID = peer.ID()
-			msg.PeerIP = peer.ip.String()
+			msg.PeerIP = peer.ip
 			success := peer.Send(msg)
 			successChan <- success
 		}(peer)
@@ -128,7 +343,11 @@ func (node *P2pNode) broadcast(msg MsgInfo) chan bool {
 }
 
 func (node *P2pNode) procMsg(msg *tmtypes.QbftP2PMsg) {
-	peer, err := node.getPeer(ID(msg.PeerId))
+	if ID(msg.FromId) == node.ID {
+		qbftlog.Warn("receive msg from self", "msg", msg)
+		return
+	}
+	peer, err := node.getPeer(ID(msg.FromId))
 	if err != nil {
 		qbftlog.Error("procMsg getPeer", "err", err)
 		return
@@ -157,13 +376,26 @@ func (node *P2pNode) getPeer(id interface{}) (*p2pPeer, error) {
 	return peer, nil
 }
 
+func (node *P2pNode) GetPeerIP(id ID) string {
+	if id == node.ID {
+		return node.IP
+	}
+	peer, err := node.getPeer(id)
+	if err != nil {
+		return ""
+	}
+	return peer.ip
+}
+
 // p2pPeer
 type p2pPeer struct {
-	ip net.IP
 	id ID
+	ip string
 
-	myState *ConsensusState
-	state   *PeerConnState
+	myState    *ConsensusState
+	state      *PeerConnState
+	valIdSet   *lru.Cache
+	aliveCount int32
 
 	recvQueue        chan *tmtypes.QbftP2PMsg
 	recvQueueSize    int32
@@ -176,17 +408,28 @@ type p2pPeer struct {
 }
 
 // NewP2pPeer method
-func NewP2pPeer(state *ConsensusState) *p2pPeer {
+func NewP2pPeer(id ID, ip string, state *ConsensusState, valIdSet *lru.Cache) *p2pPeer {
 	peer := &p2pPeer{
-		myState: state,
+		id:               id,
+		ip:               ip,
+		myState:          state,
+		valIdSet:         valIdSet,
+		aliveCount:       maxAliveCount,
+		recvQueue:        make(chan *tmtypes.QbftP2PMsg, maxMsgQueueSize),
+		updateStateQueue: make(chan MsgInfo, maxMsgQueueSize),
+		heartbeatQueue:   make(chan proto.Message, 100),
 	}
+	peer.state = &PeerConnState{ip: net.ParseIP(ip), PeerRoundState: ttypes.PeerRoundState{
+		Round:              -1,
+		ProposalPOLRound:   -1,
+		LastCommitRound:    -1,
+		CatchupCommitRound: -1,
+	}}
 	peer.SetTransferChannel(state.peerMsgQueue)
 	return peer
 }
 
 func (pp *p2pPeer) Start() error {
-	pp.recvQueue = make(chan *tmtypes.QbftP2PMsg, maxRecvQueueSize)
-	//采用context来统一管理所有服务
 	pp.ctx, pp.cancel = context.WithCancel(context.Background())
 
 	go pp.recvRoutine()
@@ -197,10 +440,11 @@ func (pp *p2pPeer) Start() error {
 	return nil
 }
 
-func (pp *p2pPeer) Stop() {
+func (pp *p2pPeer) Stop() error {
 	if pp.cancel != nil {
 		pp.cancel()
 	}
+	return nil
 }
 
 func (pp *p2pPeer) ID() ID {
@@ -209,6 +453,20 @@ func (pp *p2pPeer) ID() ID {
 
 func (pp *p2pPeer) SetTransferChannel(transferChannel chan MsgInfo) {
 	pp.transferChannel = transferChannel
+}
+
+func (pp *p2pPeer) GetAliveCount() int32 { return atomic.LoadInt32(&pp.aliveCount) }
+
+func (pp *p2pPeer) IncAliveCount() {
+	if atomic.LoadInt32(&pp.aliveCount) < maxAliveCount {
+		atomic.AddInt32(&pp.aliveCount, 1)
+	}
+}
+
+func (pp *p2pPeer) DecAliveCount() {
+	if atomic.LoadInt32(&pp.aliveCount) > 0 {
+		atomic.AddInt32(&pp.aliveCount, -1)
+	}
 }
 
 func (pp *p2pPeer) recvRoutine() {
@@ -224,7 +482,7 @@ func (pp *p2pPeer) recvRoutine() {
 }
 
 func (pp *p2pPeer) transferMsg(ty byte, msg proto.Message) {
-	pp.transferChannel <- MsgInfo{ty, msg, pp.id, pp.ip.String()}
+	pp.transferChannel <- MsgInfo{ty, msg, pp.id, pp.ip}
 }
 
 func (pp *p2pPeer) handleMsg(msg *tmtypes.QbftP2PMsg) {
@@ -236,16 +494,16 @@ func (pp *p2pPeer) handleMsg(msg *tmtypes.QbftP2PMsg) {
 		pp.transferMsg(ty, proposal)
 		ps.SetHasProposal(proposal)
 	case ttypes.VoteID:
+		pp.transferMsg(ty, msg.GetVote())
 		vote := &ttypes.Vote{QbftVote: msg.GetVote()}
-		pp.transferMsg(ty, vote)
 		ps.SetHasVote(vote)
 	case ttypes.ProposalBlockID:
+		pp.transferMsg(ty, msg.GetBlock())
 		block := &ttypes.QbftBlock{QbftBlock: msg.GetBlock()}
-		pp.transferMsg(ty, block)
 		ps.SetHasProposalBlock(block)
 	case ttypes.AggVoteID:
+		pp.transferMsg(ty, msg.GetAggVote())
 		aggVote := &ttypes.AggVote{QbftAggVote: msg.GetAggVote()}
-		pp.transferMsg(ty, aggVote)
 		ps.SetHasAggVote(aggVote)
 	case ttypes.NewRoundStepID:
 		ps.ApplyNewRoundStepMessage(msg.GetNewRoundStep())
@@ -274,7 +532,7 @@ func (pp *p2pPeer) handleMsg(msg *tmtypes.QbftP2PMsg) {
 				BlockID: maj32.BlockID,
 				Votes:   myVotes.QbftBitArray,
 			}
-			pp.Send(MsgInfo{TypeID: ttypes.VoteSetBitsID, Msg: voteSetBitMsg, PeerID: pp.id, PeerIP: pp.ip.String()})
+			pp.Send(MsgInfo{TypeID: ttypes.VoteSetBitsID, Msg: voteSetBitMsg, PeerID: pp.id, PeerIP: pp.ip})
 		}
 	case ttypes.ProposalPOLID:
 		ps.ApplyProposalPOLMessage(msg.GetProposalPOL())
@@ -300,10 +558,37 @@ func (pp *p2pPeer) handleMsg(msg *tmtypes.QbftP2PMsg) {
 		qbftlog.Debug("Received proposal heartbeat message",
 			"height", heartbeat.Height, "round", heartbeat.Round, "sequence", heartbeat.Sequence,
 			"valIdx", heartbeat.ValidatorIndex, "valAddr", fmt.Sprintf("%X", heartbeat.ValidatorAddress))
+		pp.procHeartbeatMsg(heartbeat)
 	default:
-		qbftlog.Error("paracross ProcEvent not support", "ty", msg.GetTy())
+		qbftlog.Error("qbft ProcEvent not support", "ty", msg.GetTy())
 	}
 
+}
+
+func (pp *p2pPeer) procHeartbeatMsg(heartbeat *tmtypes.QbftHeartbeat) {
+	_, val := pp.myState.Validators.GetByIndex(int(heartbeat.ValidatorIndex))
+	// Verify signature
+	pubkey, err := ttypes.ConsensusCrypto.PubKeyFromBytes(val.PubKey)
+	if err != nil {
+		qbftlog.Error("procHeartbeatMsg PubKeyFromBytes", "err", err)
+	}
+	heartbeatTmp := &ttypes.Heartbeat{QbftHeartbeat: heartbeat}
+	signature, err := ttypes.ConsensusCrypto.SignatureFromBytes(heartbeat.Signature)
+	if err != nil {
+		qbftlog.Error("procHeartbeatMsg SignatureFromBytes", "err", err)
+	}
+	if !pubkey.VerifyBytes(ttypes.SignBytes(pp.myState.state.ChainID, heartbeatTmp), signature) {
+		qbftlog.Error("procHeartbeatMsg VerifyBytes", "err", err)
+	}
+	valId := pubkey.KeyString()
+	if id, ok := pp.valIdSet.Get(valId); ok {
+		if id.(ID) == pp.ID() {
+			return
+		}
+		qbftlog.Info("old valId info", "valId", valId, "old", id.(ID))
+	}
+	pp.valIdSet.Add(valId, pp.ID())
+	qbftlog.Info("add new valId", "valId", valId, "pid", pp.ID())
 }
 
 func (pp *p2pPeer) gossipDataRoutine() {
@@ -333,8 +618,8 @@ func (pp *p2pPeer) gossipDataRoutine() {
 						time.Sleep(pp.myState.PeerGossipSleep())
 						continue
 					}
-					msg := MsgInfo{TypeID: ttypes.ProposalBlockID, Msg: proposalBlock, PeerID: pp.id, PeerIP: pp.ip.String()}
-					qbftlog.Info("Sending block for catchup", "peerIP", pp.ip.String(),
+					msg := MsgInfo{TypeID: ttypes.ProposalBlockID, Msg: proposalBlock, PeerID: pp.id, PeerIP: pp.ip}
+					qbftlog.Info("Sending block for catchup", "peerIP", pp.ip,
 						"selfHeight", rs.Height, "peer(H/R/S)", fmt.Sprintf("%v/%v/%v", prs.Height, prs.Round, prs.Step),
 						"block(H/R/hash)", fmt.Sprintf("%v/%v/%X", proposalBlock.Header.Height, proposalBlock.Header.Round, newBlock.Hash()))
 					if pp.Send(msg) {
@@ -359,9 +644,9 @@ func (pp *p2pPeer) gossipDataRoutine() {
 			if rs.Proposal != nil && !prs.Proposal {
 				// Proposal: share the proposal metadata with peer.
 				{
-					msg := MsgInfo{TypeID: ttypes.ProposalID, Msg: rs.Proposal, PeerID: pp.id, PeerIP: pp.ip.String()}
+					msg := MsgInfo{TypeID: ttypes.ProposalID, Msg: rs.Proposal, PeerID: pp.id, PeerIP: pp.ip}
 					qbftlog.Debug(fmt.Sprintf("Sending proposal. Self myState: %v/%v/%v", rs.Height, rs.Round, rs.Step),
-						"peerip", pp.ip.String(), "proposal-height", rs.Proposal.Height, "proposal-round", rs.Proposal.Round)
+						"peerip", pp.ip, "proposal-height", rs.Proposal.Height, "proposal-round", rs.Proposal.Round)
 					if pp.Send(msg) {
 						pp.state.SetHasProposal(rs.Proposal)
 					}
@@ -375,7 +660,7 @@ func (pp *p2pPeer) gossipDataRoutine() {
 						Height:           rs.Height,
 						ProposalPOLRound: rs.Proposal.POLRound,
 						ProposalPOL:      rs.Votes.Prevotes(int(rs.Proposal.POLRound)).BitArray().QbftBitArray,
-					}, PeerID: pp.id, PeerIP: pp.ip.String()}
+					}, PeerID: pp.id, PeerIP: pp.ip}
 					qbftlog.Debug("Sending POL", "height", prs.Height, "round", prs.Round)
 					pp.Send(msg)
 				}
@@ -385,9 +670,9 @@ func (pp *p2pPeer) gossipDataRoutine() {
 			// Send proposal block
 			if rs.Proposal != nil && prs.ProposalBlockHash != nil && bytes.Equal(rs.Proposal.Blockhash, prs.ProposalBlockHash) {
 				if rs.ProposalBlock != nil && !prs.ProposalBlock {
-					msg := MsgInfo{TypeID: ttypes.ProposalBlockID, Msg: rs.ProposalBlock.QbftBlock, PeerID: pp.id, PeerIP: pp.ip.String()}
+					msg := MsgInfo{TypeID: ttypes.ProposalBlockID, Msg: rs.ProposalBlock.QbftBlock, PeerID: pp.id, PeerIP: pp.ip}
 					qbftlog.Debug(fmt.Sprintf("Sending proposal block. Self myState: %v/%v/%v", rs.Height, rs.Round, rs.Step),
-						"peerip", pp.ip.String(), "block-height", rs.ProposalBlock.Header.Height, "block-round", rs.ProposalBlock.Header.Round)
+						"peerip", pp.ip, "block-height", rs.ProposalBlock.Header.Height, "block-round", rs.ProposalBlock.Header.Round)
 					if pp.Send(msg) {
 						pp.state.SetHasProposalBlock(rs.ProposalBlock)
 					}
@@ -434,7 +719,7 @@ func (pp *p2pPeer) gossipVotesRoutine() {
 			// If peer is lagging by height 1, send LastCommit.
 			if prs.Height != 0 && rs.Height == prs.Height+1 {
 				if pp.PickSendVote(rs.LastCommit) {
-					qbftlog.Debug("Pick rs.LastCommit to send", "peerip", pp.ip.String(), "height", prs.Height)
+					qbftlog.Debug("Pick rs.LastCommit to send", "peerip", pp.ip, "height", prs.Height)
 					continue
 				}
 			}
@@ -450,7 +735,7 @@ func (pp *p2pPeer) gossipVotesRoutine() {
 					qbftlog.Info("Pick Catchup commit to send",
 						"commit(H/R)", fmt.Sprintf("%v/%v", commitObj.Height(), commitObj.Round()),
 						"BitArray", commitObj.BitArray().String(),
-						"peerip", pp.ip.String(), "peer(H/R/S)", fmt.Sprintf("%v/%v/%v", prs.Height, prs.Round, prs.Step))
+						"peerip", pp.ip, "peer(H/R/S)", fmt.Sprintf("%v/%v/%v", prs.Height, prs.Round, prs.Step))
 					continue
 				}
 			}
@@ -458,7 +743,7 @@ func (pp *p2pPeer) gossipVotesRoutine() {
 			if sleeping == 0 {
 				// We sent nothing. Sleep...
 				sleeping = 1
-				qbftlog.Debug("No votes to send, sleeping", "peerip", pp.ip.String(), "rs.Height", rs.Height, "prs.Height", prs.Height,
+				qbftlog.Debug("No votes to send, sleeping", "peerip", pp.ip, "rs.Height", rs.Height, "prs.Height", prs.Height,
 					"localPV", rs.Votes.Prevotes(rs.Round).BitArray(), "peerPV", prs.Prevotes,
 					"localPC", rs.Votes.Precommits(rs.Round).BitArray(), "peerPC", prs.Precommits)
 			} else if sleeping == 2 {
@@ -476,7 +761,7 @@ func (pp *p2pPeer) gossipVotesForHeight(rs *ttypes.RoundState, prs *ttypes.PeerR
 	// If there are lastCommits to send...
 	if prs.Step == ttypes.RoundStepNewHeight {
 		if pp.PickSendVote(rs.LastCommit) {
-			qbftlog.Debug("Pick rs.LastCommit to send", "peerip", pp.ip.String(),
+			qbftlog.Debug("Pick rs.LastCommit to send", "peerip", pp.ip,
 				"peer(H/R)", fmt.Sprintf("%v/%v", prs.Height, prs.Round))
 			return true
 		}
@@ -486,7 +771,7 @@ func (pp *p2pPeer) gossipVotesForHeight(rs *ttypes.RoundState, prs *ttypes.PeerR
 		if polPrevotes := rs.Votes.Prevotes(prs.ProposalPOLRound); polPrevotes != nil {
 			if pp.PickSendVote(polPrevotes) {
 				qbftlog.Debug("Pick rs.Prevotes(prs.ProposalPOLRound) to send",
-					"peerip", pp.ip.String(), "peer(H/R)", fmt.Sprintf("%v/%v", prs.Height, prs.Round),
+					"peerip", pp.ip, "peer(H/R)", fmt.Sprintf("%v/%v", prs.Height, prs.Round),
 					"POLRound", prs.ProposalPOLRound)
 				return true
 			}
@@ -496,7 +781,7 @@ func (pp *p2pPeer) gossipVotesForHeight(rs *ttypes.RoundState, prs *ttypes.PeerR
 	if prs.Step <= ttypes.RoundStepPrevoteWait && prs.Round != -1 && prs.Round <= rs.Round {
 		if pp.PickSendVote(rs.Votes.Prevotes(prs.Round)) {
 			qbftlog.Debug("Pick rs.Prevotes(prs.Round) to send",
-				"peerip", pp.ip.String(), "peer(H/R)", fmt.Sprintf("%v/%v", prs.Height, prs.Round))
+				"peerip", pp.ip, "peer(H/R)", fmt.Sprintf("%v/%v", prs.Height, prs.Round))
 			return true
 		}
 	}
@@ -504,7 +789,7 @@ func (pp *p2pPeer) gossipVotesForHeight(rs *ttypes.RoundState, prs *ttypes.PeerR
 	if prs.Step <= ttypes.RoundStepPrecommitWait && prs.Round != -1 && prs.Round <= rs.Round {
 		if pp.PickSendVote(rs.Votes.Precommits(prs.Round)) {
 			qbftlog.Debug("Pick rs.Precommits(prs.Round) to send",
-				"peerip", pp.ip.String(), "peer(H/R)", fmt.Sprintf("%v/%v", prs.Height, prs.Round))
+				"peerip", pp.ip, "peer(H/R)", fmt.Sprintf("%v/%v", prs.Height, prs.Round))
 			return true
 		}
 	}
@@ -512,7 +797,7 @@ func (pp *p2pPeer) gossipVotesForHeight(rs *ttypes.RoundState, prs *ttypes.PeerR
 	if prs.Round != -1 && prs.Round <= rs.Round {
 		if pp.PickSendVote(rs.Votes.Prevotes(prs.Round)) {
 			qbftlog.Debug("Pick rs.Prevotes(prs.Round) to send",
-				"peerip", pp.ip.String(), "peer(H/R)", fmt.Sprintf("%v/%v", prs.Height, prs.Round))
+				"peerip", pp.ip, "peer(H/R)", fmt.Sprintf("%v/%v", prs.Height, prs.Round))
 			return true
 		}
 	}
@@ -521,7 +806,7 @@ func (pp *p2pPeer) gossipVotesForHeight(rs *ttypes.RoundState, prs *ttypes.PeerR
 		if polPrevotes := rs.Votes.Prevotes(prs.ProposalPOLRound); polPrevotes != nil {
 			if pp.PickSendVote(polPrevotes) {
 				qbftlog.Debug("Pick rs.Prevotes(prs.ProposalPOLRound) to send",
-					"peerip", pp.ip.String(), "round", prs.ProposalPOLRound)
+					"peerip", pp.ip, "round", prs.ProposalPOLRound)
 				return true
 			}
 		}
@@ -547,7 +832,7 @@ func (pp *p2pPeer) queryMaj23Routine() {
 							Round:   int32(prs.Round),
 							Type:    int32(ttypes.VoteTypePrevote),
 							BlockID: &maj23,
-						}, PeerID: pp.id, PeerIP: pp.ip.String(),
+						}, PeerID: pp.id, PeerIP: pp.ip,
 						}
 						pp.Send(msg)
 						time.Sleep(pp.myState.PeerQueryMaj23Sleep())
@@ -566,7 +851,7 @@ func (pp *p2pPeer) queryMaj23Routine() {
 							Round:   int32(prs.Round),
 							Type:    int32(ttypes.VoteTypePrecommit),
 							BlockID: &maj23,
-						}, PeerID: pp.id, PeerIP: pp.ip.String(),
+						}, PeerID: pp.id, PeerIP: pp.ip,
 						}
 						pp.Send(msg)
 						time.Sleep(pp.myState.PeerQueryMaj23Sleep())
@@ -585,7 +870,7 @@ func (pp *p2pPeer) queryMaj23Routine() {
 							Round:   int32(prs.ProposalPOLRound),
 							Type:    int32(ttypes.VoteTypePrevote),
 							BlockID: &maj23,
-						}, PeerID: pp.id, PeerIP: pp.ip.String(),
+						}, PeerID: pp.id, PeerIP: pp.ip,
 						}
 						pp.Send(msg)
 						time.Sleep(pp.myState.PeerQueryMaj23Sleep())
@@ -608,7 +893,7 @@ func (pp *p2pPeer) queryMaj23Routine() {
 							Round:   int32(commitTmp.Round()),
 							Type:    int32(ttypes.VoteTypePrecommit),
 							BlockID: commit.BlockID,
-						}, PeerID: pp.id, PeerIP: pp.ip.String(),
+						}, PeerID: pp.id, PeerIP: pp.ip,
 						}
 						pp.Send(msg)
 						time.Sleep(pp.myState.PeerQueryMaj23Sleep())
@@ -628,7 +913,7 @@ func (pp *p2pPeer) PickSendVote(votes ttypes.VoteSetReader) bool {
 	if UseAggSig() {
 		if votes.GetAggVote() != nil {
 			if aggVote, ok := pp.state.PickAggVoteToSend(votes); ok {
-				msg := MsgInfo{TypeID: ttypes.AggVoteID, Msg: aggVote.QbftAggVote, PeerID: pp.id, PeerIP: pp.ip.String()}
+				msg := MsgInfo{TypeID: ttypes.AggVoteID, Msg: aggVote.QbftAggVote, PeerID: pp.id, PeerIP: pp.ip}
 				qbftlog.Debug("Sending aggregate vote message", "msg", msg)
 				if pp.Send(msg) {
 					pp.state.SetHasAggVote(aggVote)
@@ -643,7 +928,7 @@ func (pp *p2pPeer) PickSendVote(votes ttypes.VoteSetReader) bool {
 			qbftlog.Warn("Pick nil vote", "aggVote", votes.GetAggVote(), "vote", votes)
 			return false
 		}
-		msg := MsgInfo{TypeID: ttypes.VoteID, Msg: vote.QbftVote, PeerID: pp.id, PeerIP: pp.ip.String()}
+		msg := MsgInfo{TypeID: ttypes.VoteID, Msg: vote.QbftVote, PeerID: pp.id, PeerIP: pp.ip}
 		qbftlog.Debug("Sending vote message", "msg", msg)
 		if pp.Send(msg) {
 			pp.state.SetHasVote(vote)
@@ -654,7 +939,8 @@ func (pp *p2pPeer) PickSendVote(votes ttypes.VoteSetReader) bool {
 }
 
 func (pp *p2pPeer) Send(msg MsgInfo) bool {
-	p2pMsg := convertToP2pMsg(msg)
+	fromId := pp.myState.GetOurID()
+	p2pMsg := convertToP2pMsg(msg, fromId)
 	if p2pMsg == nil {
 		return false
 	}
@@ -663,7 +949,7 @@ func (pp *p2pPeer) Send(msg MsgInfo) bool {
 		qbftlog.Error("p2pPeer marshal msg fail", "err", err)
 		return false
 	}
-	err = pp.myState.client.SendPeerMsg(qbftMsgTopic, string(msg.PeerID), bytes)
+	err = pp.myState.client.SendPeerMsg(qbftMsgTopic, string(fromId), string(msg.PeerID), bytes)
 	if err != nil {
 		qbftlog.Error("p2pPeer send msg fail", "err", err)
 		return false
@@ -671,8 +957,8 @@ func (pp *p2pPeer) Send(msg MsgInfo) bool {
 	return true
 }
 
-func convertToP2pMsg(msg MsgInfo) *tmtypes.QbftP2PMsg {
-	p2pMsg := &tmtypes.QbftP2PMsg{Ty: int32(msg.TypeID), PeerId: string(msg.PeerID)}
+func convertToP2pMsg(msg MsgInfo, from ID) *tmtypes.QbftP2PMsg {
+	p2pMsg := &tmtypes.QbftP2PMsg{Ty: int32(msg.TypeID), PeerId: string(msg.PeerID), FromId: string(from)}
 	switch msg.TypeID {
 	case ttypes.NewRoundStepID:
 		p2pMsg.Value = &tmtypes.QbftP2PMsg_NewRoundStep{NewRoundStep: msg.Msg.(*tmtypes.QbftNewRoundStepMsg)}
@@ -704,10 +990,27 @@ func convertToP2pMsg(msg MsgInfo) *tmtypes.QbftP2PMsg {
 }
 
 // p2p订阅消息
-func (client *Client) SendPeerMsg(topic string, pid string, msg []byte) error {
-	data := &types.PeerMessage{Topic: topic, Module: moduleName, PeerId: pid, Msg: msg}
+func (client *Client) SendPeerMsg(topic string, from string, pid string, msg []byte) error {
+	data := &types.PeerMessage{Topic: topic, Module: moduleName, From: from, PeerId: pid, Msg: msg}
 	_, err := client.sendP2PMsg(types.EventPeerMessage, data)
 	return err
+}
+
+func (client *Client) SendFetchPeerList() (*types.PeerList, error) {
+	msg := client.GetQueueClient().NewMessage("p2p", types.EventPeerInfo, nil)
+	err := client.GetQueueClient().Send(msg, true)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.GetQueueClient().Wait(msg)
+	if err != nil {
+		return nil, err
+	}
+	list, ok := resp.GetData().(*types.PeerList)
+	if !ok {
+		return nil, fmt.Errorf("not PeerList")
+	}
+	return list, err
 }
 
 func (client *Client) SendPubP2PMsg(topic string, msg []byte) error {

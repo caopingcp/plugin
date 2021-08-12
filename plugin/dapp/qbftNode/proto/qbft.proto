@@ -212,4 +212,5 @@ message QbftP2PMsg {
     }
     int32  ty     = 12;
     string peerId = 13;
+    string fromId = 14;
 }

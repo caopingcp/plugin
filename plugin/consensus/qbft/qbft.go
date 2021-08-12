@@ -59,6 +59,7 @@ var (
 	useAggSig             atomic.Value // false
 	multiBlocks           atomic.Value // 1
 	gossipVotes           atomic.Value
+	useExclusiveP2P       atomic.Value // false
 
 	zeroHash                    [32]byte
 	random                      *rand.Rand
@@ -112,6 +113,7 @@ type subConfig struct {
 	SignName              string   `json:"signName"`
 	UseAggregateSignature bool     `json:"useAggregateSignature"`
 	MultiBlocks           int64    `json:"multiBlocks"`
+	UseExclusiveP2P       bool     `json:"useExclusiveP2P"`
 }
 
 func applyConfig(sub []byte) {
@@ -159,6 +161,7 @@ func applyConfig(sub []byte) {
 	if subcfg.MultiBlocks > 0 {
 		multiBlocks.Store(subcfg.MultiBlocks)
 	}
+	useExclusiveP2P.Store(subcfg.UseExclusiveP2P)
 
 	gossipVotes.Store(true)
 }
@@ -166,6 +169,11 @@ func applyConfig(sub []byte) {
 // UseAggSig returns whether use aggregate signature
 func UseAggSig() bool {
 	return useAggSig.Load().(bool)
+}
+
+// UseExclusiveP2P returns whether use exclusive p2p
+func UseExclusiveP2P() bool {
+	return useExclusiveP2P.Load().(bool)
 }
 
 // DefaultDBProvider returns a database
@@ -222,7 +230,7 @@ func New(cfg *types.Consensus, sub []byte) queue.Module {
 		return nil
 	}
 
-	qbftlog.Info("show qbft info", "sign", ttypes.CryptoName, "useAggSig", useAggSig, "genesisFile", genesisFile,
+	qbftlog.Info("show qbft info", "sign", ttypes.CryptoName, "useAggSig", UseAggSig(), "genesisFile", genesisFile,
 		"privFile", privFile)
 
 	ttypes.InitMessageMap()
@@ -263,6 +271,9 @@ func (client *Client) Close() {
 	}
 	if client.node != nil {
 		client.node.Stop()
+	}
+	if client.p2pNode != nil {
+		client.p2pNode.Stop()
 	}
 	qbftlog.Info("consensus qbft closed")
 }
@@ -365,15 +376,17 @@ OuterLoop:
 
 	client.csState = csState
 
-	// Create & add listener
-	protocol, listeningAddress := "tcp", fmt.Sprintf(":%d", port)
-	node := NewNode(validatorNodes, protocol, listeningAddress, client.privKey, state.ChainID, qbftVersion, csState)
+	if UseExclusiveP2P() {
+		// Create & add listener
+		protocol, listeningAddress := "tcp", fmt.Sprintf(":%d", port)
+		node := NewNode(validatorNodes, protocol, listeningAddress, client.privKey, state.ChainID, qbftVersion, csState)
 
-	client.node = node
-	node.Start()
-
-	client.p2pNode = NewP2pNode(csState, client.ctx)
-	client.p2pNode.Start()
+		client.node = node
+		node.Start()
+	} else {
+		client.p2pNode = NewP2pNode(csState)
+		client.p2pNode.Start()
+	}
 
 	go client.CreateBlock()
 }
@@ -454,16 +467,20 @@ func (client *Client) CheckBlock(parent *types.Block, current *types.BlockDetail
 
 // ProcEvent reply not support action err
 func (client *Client) ProcEvent(msg *queue.Message) bool {
-	if msg.Ty == types.EventReceiveSubData {
+	if !UseExclusiveP2P() && msg.Ty == types.EventReceiveSubData {
 		if req, ok := msg.GetData().(*types.TopicData); ok {
-			var pmsg *tmtypes.QbftP2PMsg
-			err := types.Decode(req.Data, pmsg)
+			if len(req.Data) == 0 {
+				qbftlog.Info("qbft ProcEvent get nil req data", "msg", msg)
+				return true
+			}
+			var pmsg tmtypes.QbftP2PMsg
+			err := types.Decode(req.Data, &pmsg)
 			if err != nil {
 				qbftlog.Error("qbft ProcEvent decode", "err", err)
 				return true
 			}
-			qbftlog.Info("qbft ProcEvent", "from", req.GetFrom(), "topic", req.GetTopic(), "ty", pmsg.GetTy())
-			err = client.SendToP2pNode(pmsg)
+			qbftlog.Debug("qbft ProcEvent", "from", req.GetFrom(), "topic", req.GetTopic(), "ty", pmsg.GetTy(), "fromId", pmsg.GetFromId())
+			err = client.SendToP2pNode(&pmsg)
 			if err != nil {
 				qbftlog.Error("qbft SendToP2pNode", "err", err)
 				return true
@@ -717,25 +734,7 @@ func (client *Client) Query_NodeInfo(req *types.ReqNil) (types.Message, error) {
 		if val == nil {
 			nodes = append(nodes, &tmtypes.QbftNodeInfo{})
 		} else {
-			ipstr, idstr := "UNKOWN", "UNKOWN"
-			pub, err := ttypes.ConsensusCrypto.PubKeyFromBytes(val.PubKey)
-			if err != nil {
-				qbftlog.Error("Query_NodeInfo invalid pubkey", "err", err)
-			} else {
-				id := GenIDByPubKey(pub)
-				idstr = string(id)
-				if id == client.node.ID {
-					ipstr = client.node.IP
-				} else {
-					ip := client.node.peerSet.GetIP(id)
-					if ip == nil {
-						qbftlog.Error("Query_NodeInfo nil ip", "id", idstr)
-					} else {
-						ipstr = ip.String()
-					}
-				}
-			}
-
+			ipstr, idstr := client.getInfo(val.PubKey)
 			item := &tmtypes.QbftNodeInfo{
 				NodeIP:      ipstr,
 				NodeID:      idstr,
@@ -748,6 +747,39 @@ func (client *Client) Query_NodeInfo(req *types.ReqNil) (types.Message, error) {
 		}
 	}
 	return &tmtypes.QbftNodeInfoSet{Nodes: nodes}, nil
+}
+
+func (client *Client) getInfo(pubkey []byte) (ipstr string, idstr string) {
+	ipstr, idstr = "UNKOWN", "UNKOWN"
+	pub, err := ttypes.ConsensusCrypto.PubKeyFromBytes(pubkey)
+	if err != nil {
+		qbftlog.Error("Query_NodeInfo invalid pubkey", "err", err)
+		return
+	}
+	if UseExclusiveP2P() {
+		id := GenIDByPubKey(pub)
+		idstr = string(id)
+		if id == client.node.ID {
+			ipstr = client.node.IP
+		} else {
+			ip := client.node.peerSet.GetIP(id)
+			if ip == nil {
+				qbftlog.Error("Query_NodeInfo nil ip", "id", idstr)
+			} else {
+				ipstr = ip.String()
+			}
+		}
+	} else {
+		vid := pub.KeyString()
+		if pid, ok := client.p2pNode.valIdSet.Get(vid); ok {
+			ip := client.p2pNode.GetPeerIP(pid.(ID))
+			if ip != "" {
+				ipstr = ip
+				idstr = string(pid.(ID))
+			}
+		}
+	}
+	return
 }
 
 // CmpBestBlock 比较newBlock是不是最优区块

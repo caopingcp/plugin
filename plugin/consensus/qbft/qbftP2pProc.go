@@ -30,13 +30,14 @@ const (
 
 	maxMsgQueueSize = 1024
 	maxPeersNum     = 1024
-	maxAliveCount   = 10
+	maxAliveCount   = 20
 )
 
 // P2PNode struct
 type P2pNode struct {
-	ID ID
-	IP string
+	ID    ID
+	IP    string
+	valId string
 
 	state    *ConsensusState
 	peerSet  *lru.Cache
@@ -118,9 +119,9 @@ func (node *P2pNode) initSelfInfo() {
 			if err == nil {
 				node.ID, node.IP = ID(info.Name), info.Addr
 				node.state.SetOurID(node.ID)
-				valId := node.state.privValidator.GetPubKey().KeyString()
-				node.valIdSet.Add(valId, node.ID)
-				qbftlog.Info("init self info", "id", node.ID, "ip", node.IP, "valId", valId)
+				node.valId = node.state.privValidator.GetPubKey().KeyString()
+				node.valIdSet.Add(node.valId, node.ID)
+				qbftlog.Info("init self info", "id", node.ID, "ip", node.IP, "valId", node.valId)
 				return
 			}
 			time.Sleep(1 * time.Second)
@@ -168,12 +169,12 @@ func (node *P2pNode) sendMsgRoutine() {
 		case msg := <-node.broadcastChannel:
 			node.broadcast(msg)
 		case msg := <-node.unicastChannel:
+			if string(msg.PeerID) == node.valId {
+				break
+			}
 			id, ok := node.valIdSet.Get(string(msg.PeerID))
 			if !ok {
 				qbftlog.Error(fmt.Sprintf("unicastChannel not exist valId %v", msg.PeerID))
-				break
-			}
-			if id.(ID) == node.ID {
 				break
 			}
 			peer, err := node.getPeer(id.(ID))
@@ -241,13 +242,14 @@ func (node *P2pNode) updatePeerSet() {
 			}
 		}
 	}
+	peerStrings := []string{}
 	for _, id := range node.peerSet.Keys() {
+		peer, err3 := node.getPeer(id)
+		if err3 != nil {
+			qbftlog.Error("updatePeerSet getPeer fail", "err", err3)
+			continue
+		}
 		if !isContain(list.GetPeers(), string(id.(ID))) {
-			peer, err3 := node.getPeer(id)
-			if err3 != nil {
-				qbftlog.Error("updatePeerSet getPeer fail", "err", err3)
-				continue
-			}
 			peer.DecAliveCount()
 			if peer.GetAliveCount() == 0 {
 				err4 := node.delPeer(peer)
@@ -256,7 +258,9 @@ func (node *P2pNode) updatePeerSet() {
 				}
 			}
 		}
+		peerStrings = append(peerStrings, peer.String())
 	}
+	qbftlog.Info("updatePeerSet print info", "Peers", peerStrings)
 	for _, vid := range node.valIdSet.Keys() {
 		pid, _ := node.valIdSet.Get(vid)
 		if pid.(ID) == node.ID {
@@ -268,11 +272,13 @@ func (node *P2pNode) updatePeerSet() {
 			qbftlog.Error("updatePeerSet PubKeyFromBytes fail", "err", err)
 			node.valIdSet.Remove(vid)
 			qbftlog.Info("delete wrong valId", "valId", vid, "pid", pid)
+			continue
 		}
 		addr := ttypes.GenAddressByPubKey(pubkey)
 		if !node.state.Validators.HasAddress(addr) {
 			node.valIdSet.Remove(vid)
 			qbftlog.Info("delete valId not in validator set", "valId", vid, "pid", pid)
+			continue
 		}
 	}
 }
@@ -389,8 +395,9 @@ func (node *P2pNode) GetPeerIP(id ID) string {
 
 // p2pPeer
 type p2pPeer struct {
-	id ID
-	ip string
+	id    ID
+	ip    string
+	valId string
 
 	myState    *ConsensusState
 	state      *PeerConnState
@@ -451,6 +458,17 @@ func (pp *p2pPeer) ID() ID {
 	return pp.id
 }
 
+func (pp *p2pPeer) String() string {
+	if pp == nil {
+		return "nil-Peer"
+	}
+	return fmt.Sprintf("Peer{ID:%v IP:%v VID:%v AC:%v}",
+		pp.id,
+		pp.ip,
+		pp.valId,
+		pp.aliveCount)
+}
+
 func (pp *p2pPeer) SetTransferChannel(transferChannel chan MsgInfo) {
 	pp.transferChannel = transferChannel
 }
@@ -509,6 +527,8 @@ func (pp *p2pPeer) handleMsg(msg *tmtypes.QbftP2PMsg) {
 		ps.ApplyNewRoundStepMessage(msg.GetNewRoundStep())
 	case ttypes.ValidBlockID:
 		ps.ApplyValidBlockMessage(msg.GetValidBlock())
+	case ttypes.ExpectBlockID:
+		ps.ApplyExpectBlockMessage(msg.GetExpectBlock())
 	case ttypes.HasVoteID:
 		ps.ApplyHasVoteMessage(msg.GetHasVote())
 	case ttypes.VoteSetMaj23ID:
@@ -580,15 +600,15 @@ func (pp *p2pPeer) procHeartbeatMsg(heartbeat *tmtypes.QbftHeartbeat) {
 	if !pubkey.VerifyBytes(ttypes.SignBytes(pp.myState.state.ChainID, heartbeatTmp), signature) {
 		qbftlog.Error("procHeartbeatMsg VerifyBytes", "err", err)
 	}
-	valId := pubkey.KeyString()
-	if id, ok := pp.valIdSet.Get(valId); ok {
+	pp.valId = pubkey.KeyString()
+	if id, ok := pp.valIdSet.Get(pp.valId); ok {
 		if id.(ID) == pp.ID() {
 			return
 		}
-		qbftlog.Info("old valId info", "valId", valId, "old", id.(ID))
+		qbftlog.Info("old valId info", "valId", pp.valId, "old", id.(ID))
 	}
-	pp.valIdSet.Add(valId, pp.ID())
-	qbftlog.Info("add new valId", "valId", valId, "pid", pp.ID())
+	pp.valIdSet.Add(pp.valId, pp.ID())
+	qbftlog.Info("add new valId", "valId", pp.valId, "pid", pp.ID())
 }
 
 func (pp *p2pPeer) gossipDataRoutine() {
@@ -982,6 +1002,8 @@ func convertToP2pMsg(msg MsgInfo, from ID) *tmtypes.QbftP2PMsg {
 		p2pMsg.Value = &tmtypes.QbftP2PMsg_ValidBlock{ValidBlock: msg.Msg.(*tmtypes.QbftValidBlockMsg)}
 	case ttypes.AggVoteID:
 		p2pMsg.Value = &tmtypes.QbftP2PMsg_AggVote{AggVote: msg.Msg.(*tmtypes.QbftAggVote)}
+	case ttypes.ExpectBlockID:
+		p2pMsg.Value = &tmtypes.QbftP2PMsg_ExpectBlock{ExpectBlock: msg.Msg.(*tmtypes.QbftExpectBlockMsg)}
 	default:
 		qbftlog.Error("unknown message type", "type", msg.TypeID)
 		return nil

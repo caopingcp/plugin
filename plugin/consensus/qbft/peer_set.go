@@ -1029,7 +1029,9 @@ func (ps *PeerConnState) SetHasProposal(proposal *tmtypes.QbftProposal) {
 		"proposal(H/R/Hash)", fmt.Sprintf("%v/%v/%X", proposal.Height, proposal.Round, proposal.Blockhash))
 	ps.Proposal = true
 
-	ps.ProposalBlockHash = proposal.Blockhash
+	if UseExclusiveP2P() {
+		ps.ProposalBlockHash = proposal.Blockhash
+	}
 	ps.ProposalPOLRound = int(proposal.POLRound)
 	ps.ProposalPOL = nil // Nil until ttypes.ProposalPOLMessage received.
 }
@@ -1270,6 +1272,7 @@ func (ps *PeerConnState) ApplyNewRoundStepMessage(msg *tmtypes.QbftNewRoundStepM
 	psCatchupCommitRound := ps.CatchupCommitRound
 	psCatchupCommit := ps.CatchupCommit
 	psPrecommits := ps.Precommits
+	psCatchupBlockHash := ps.CatchupBlockHash
 
 	startTime := time.Now().Add(-1 * time.Duration(msg.SecondsSinceStartTime) * time.Second)
 	ps.Height = msg.Height
@@ -1300,9 +1303,10 @@ func (ps *PeerConnState) ApplyNewRoundStepMessage(msg *tmtypes.QbftNewRoundStepM
 		// Preserve psCatchupCommit!
 		// NOTE: We prefer to use prs.Precommits if
 		// pr.Round matches pr.CatchupCommitRound.
-		qbftlog.Debug("Reset Precommits to CatchupCommit", "peerip", ps.ip.String(),
+		qbftlog.Debug("Reset Precommits to CatchupCommit, ProposalBlockHash to CatchupBlockHash", "peerip", ps.ip.String(),
 			"peer(H/R)", fmt.Sprintf("%v/%v", psHeight, psRound))
 		ps.Precommits = psCatchupCommit
+		ps.ProposalBlockHash = psCatchupBlockHash
 	}
 	if psHeight != msg.Height {
 		qbftlog.Debug("Reset LastCommit, CatchupCommit", "peerip", ps.ip.String(),
@@ -1318,6 +1322,7 @@ func (ps *PeerConnState) ApplyNewRoundStepMessage(msg *tmtypes.QbftNewRoundStepM
 		// We'll update the BitArray capacity later.
 		ps.CatchupCommitRound = -1
 		ps.CatchupCommit = nil
+		ps.CatchupBlockHash = nil
 	}
 }
 
@@ -1338,11 +1343,31 @@ func (ps *PeerConnState) ApplyValidBlockMessage(msg *tmtypes.QbftValidBlockMsg) 
 
 	ps.ProposalBlockHash = msg.Blockhash
 	if ps.CatchupCommitRound == int(msg.Round) && msg.IsCommit {
+		ps.CatchupBlockHash = msg.Blockhash
 		qbftlog.Info("Set ProposalBlockHash for catchup", "peerIP", ps.ip.String(),
 			"peer(H/R/S)", fmt.Sprintf("%v/%v/%v", ps.Height, ps.Round, ps.Step),
 			"CommitRound", ps.CatchupCommitRound,
-			"ProposalBlockHash", fmt.Sprintf("%X", ps.ProposalBlockHash))
+			"ProposalBlockHash", fmt.Sprintf("%X", ps.ProposalBlockHash),
+			"CatchupBlockHash", fmt.Sprintf("%X", ps.CatchupBlockHash))
 	}
+}
+
+// ApplyExpectBlockMessage updates the peer state for the new expect block.
+func (ps *PeerConnState) ApplyExpectBlockMessage(msg *tmtypes.QbftExpectBlockMsg) {
+	ps.mtx.Lock()
+	defer ps.mtx.Unlock()
+
+	if ps.Height != msg.Height {
+		return
+	}
+	if ps.Round != int(msg.Round) {
+		return
+	}
+	qbftlog.Debug("ApplyExpectBlockMessage", "peerIP", ps.ip.String(),
+		"peer(H/R/S)", fmt.Sprintf("%v/%v/%v", ps.Height, ps.Round, ps.Step),
+		"blockhash", fmt.Sprintf("%X", msg.Blockhash))
+
+	ps.ProposalBlockHash = msg.Blockhash
 }
 
 // ApplyProposalPOLMessage updates the peer state for the new proposal POL.

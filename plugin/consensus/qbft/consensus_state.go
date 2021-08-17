@@ -1355,6 +1355,15 @@ func (cs *ConsensusState) defaultSetProposal(proposal *tmtypes.QbftProposal) err
 	cs.ProposalBlockHash = proposal.Blockhash
 	qbftlog.Info(fmt.Sprintf("Consensus set proposal. Current: %v/%v/%v", cs.Height, cs.Round, cs.Step),
 		"blockhash", fmt.Sprintf("%X", cs.Proposal.Blockhash), "cost", types.Since(cs.begCons))
+
+	if !UseExclusiveP2P() {
+		expectBlockMsg := &tmtypes.QbftExpectBlockMsg{
+			Height:    cs.Height,
+			Round:     int32(cs.Round),
+			Blockhash: cs.ProposalBlockHash,
+		}
+		cs.broadcastChannel <- MsgInfo{TypeID: ttypes.ExpectBlockID, Msg: expectBlockMsg, PeerID: "", PeerIP: ""}
+	}
 	return nil
 }
 

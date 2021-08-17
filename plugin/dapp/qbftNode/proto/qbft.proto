@@ -144,6 +144,12 @@ message QbftValidBlockMsg {
     bool  isCommit  = 4;
 }
 
+message QbftExpectBlockMsg {
+    int64 height    = 1;
+    int32 round     = 2;
+    bytes blockhash = 3;
+}
+
 message QbftProposalPOLMsg {
     int64        height           = 1;
     int32        proposalPOLRound = 2;
@@ -209,8 +215,9 @@ message QbftP2PMsg {
         QbftBlock           block        = 9;
         QbftValidBlockMsg   validBlock   = 10;
         QbftAggVote         aggVote      = 11;
+        QbftExpectBlockMsg  expectBlock  = 12;
     }
-    int32  ty     = 12;
-    string peerId = 13;
-    string fromId = 14;
+    int32  ty     = 21;
+    string peerId = 22;
+    string fromId = 23;
 }

@@ -46,6 +46,7 @@ const (
 	ProposalBlockID     = byte(0x09)
 	ValidBlockID        = byte(0x0a)
 	AggVoteID           = byte(0x0b)
+	ExpectBlockID       = byte(0x0c)
 )
 
 // InitMessageMap ...
@@ -62,6 +63,7 @@ func InitMessageMap() {
 		ProposalBlockID:     reflect.TypeOf(tmtypes.QbftBlock{}),
 		ValidBlockID:        reflect.TypeOf(tmtypes.QbftValidBlockMsg{}),
 		AggVoteID:           reflect.TypeOf(tmtypes.QbftAggVote{}),
+		ExpectBlockID:       reflect.TypeOf(tmtypes.QbftExpectBlockMsg{}),
 	}
 	P2PMsgMap = map[byte]reflect.Type{
 		NewRoundStepID:      reflect.TypeOf(tmtypes.QbftP2PMsg_NewRoundStep{}),
@@ -75,6 +77,7 @@ func InitMessageMap() {
 		ProposalBlockID:     reflect.TypeOf(tmtypes.QbftP2PMsg_Block{}),
 		ValidBlockID:        reflect.TypeOf(tmtypes.QbftP2PMsg_ValidBlock{}),
 		AggVoteID:           reflect.TypeOf(tmtypes.QbftP2PMsg_AggVote{}),
+		ExpectBlockID:       reflect.TypeOf(tmtypes.QbftP2PMsg_ExpectBlock{}),
 	}
 }
 
@@ -207,6 +210,7 @@ type PeerRoundState struct {
 	CatchupCommit      *BitArray // All commit precommits peer has for this height & CatchupCommitRound
 	AggPrevote         bool      // True if peer has aggregate prevote for this round
 	AggPrecommit       bool      // True if peer has aggregate precommit for this round
+	CatchupBlockHash   []byte    // ProposalBlockHash that peer has for this height & CatchupCommitRound
 }
 
 // String returns a string representation of the PeerRoundState
@@ -228,6 +232,7 @@ func (prs PeerRoundState) StringIndented(indent string) string {
 %s  CatchupCommit %v (round %v)
 %s  AggPrevote %v
 %s  AggPrecommit %v
+%s  CatchupBlockHash %X
 %s}`,
 		indent, prs.Height, prs.Round, prs.Step, prs.StartTime,
 		indent, prs.Proposal,
@@ -240,6 +245,7 @@ func (prs PeerRoundState) StringIndented(indent string) string {
 		indent, prs.CatchupCommit, prs.CatchupCommitRound,
 		indent, prs.AggPrevote,
 		indent, prs.AggPrecommit,
+		indent, prs.CatchupBlockHash,
 		indent)
 }
 

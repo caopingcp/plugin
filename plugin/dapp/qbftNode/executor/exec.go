@@ -8,6 +8,7 @@ import (
 	"errors"
 
 	dbm "github.com/33cn/chain33/common/db"
+	manager "github.com/33cn/chain33/system/dapp/manage/types"
 	"github.com/33cn/chain33/types"
 	pty "github.com/33cn/plugin/plugin/dapp/qbftNode/types"
 )
@@ -16,7 +17,7 @@ const managerKey = "qbft-manager"
 
 // Exec_Node method
 func (val *QbftNode) Exec_Node(node *pty.QbftNode, tx *types.Transaction, index int) (*types.Receipt, error) {
-	if !isValidManager(tx.From(), val.GetStateDB()) {
+	if !isValidManager(val.GetAPI().GetConfig(), tx.From(), val.GetStateDB()) {
 		return nil, errors.New("not valid manager")
 	}
 	if node.GetPubKey() == "" {
@@ -55,7 +56,10 @@ func getManageKey(key string, db dbm.KV) ([]byte, error) {
 	return value, nil
 }
 
-func isValidManager(addr string, db dbm.KV) bool {
+func isValidManager(cfg *types.Chain33Config, addr string, db dbm.KV) bool {
+	if isSuperManager(cfg, addr) {
+		return true
+	}
 	value, err := getManageKey(managerKey, db)
 	if err != nil {
 		clog.Error("isValidManager nil key", "managerKey", managerKey)
@@ -78,5 +82,18 @@ func isValidManager(addr string, db dbm.KV) bool {
 			return true
 		}
 	}
+	clog.Error("isValidManager not found", "manager", item.GetArr().Value, "addr", addr)
+	return false
+}
+
+// IsSuperManager is supper manager or not
+func isSuperManager(cfg *types.Chain33Config, addr string) bool {
+	confManager := types.ConfSub(cfg, manager.ManageX)
+	for _, m := range confManager.GStrList("superManager") {
+		if addr == m {
+			return true
+		}
+	}
+	clog.Error("isSuperManager not found", "superManager", confManager.GStrList("superManager"), "addr", addr)
 	return false
 }

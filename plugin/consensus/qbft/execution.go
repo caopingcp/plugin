@@ -191,7 +191,7 @@ func changeInVotingPowerMoreOrEqualToOneThird(currentSet *ttypes.ValidatorSet, u
 			acc += np
 		}
 
-		if acc >= threshold {
+		if acc > threshold {
 			return true, nil
 		}
 	}
